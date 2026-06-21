@@ -6,10 +6,15 @@ baixa o `MONAN-Coupler` (com os modelos como submódulos) e compila tudo.
 
 INPE / CGCT / DIMNT — GT Acoplamento de Modelos.
 
+**Pré-requisitos:** `git` e o **ESMF 8.9.1** já instalado (com MOAB interno) — o
+caminho do ESMF é informado pela configuração de sítio (`sites/site-jaci.bash`).
+Os modelos (MONAN-Model, MOM6-examples) chegam como **submódulos**; não é preciso
+cloná-los à parte.
+
 ## Uso (um comando)
 
 ```bash
-git clone https://github.com/GTA-DIMNT-CPTEC/Coupler-Install.git
+git clone --branch develop https://github.com/GTA-DIMNT-CPTEC/Coupler-Install.git
 cd Coupler-Install
 bash install.bash
 ```
@@ -19,20 +24,31 @@ O `install.bash` faz `git clone --recursive --branch develop` do
 aninhados) e, em seguida, executa as três etapas de instalação.
 
 Opções: `--coupler-root DIR`, `--branch BRANCH`, `--no-install` (só baixa),
-`--from N` / `--only N` (repassadas ao `build.bash`).
+`--from N` / `--only N` (repassadas ao `build.bash`). Veja todas com
+`bash install.bash --help`.
+
+Ao final, o executável fica em `<COUPLER_ROOT>/bin/esmApp`. Nas sessões
+seguintes, a partir da raiz do sistema acoplado, basta recompilar/submeter sem o
+instalador:
+
+```bash
+source run/setenv-gnu.bash      # define ESMFMKFILE, MPAS_DIR, MOM6_ROOT…
+make                            # (re)compila bin/esmApp
+bash run/run_esmApp.jaci -n 128 # submete via PBS (128 PETs)
+```
 
 ## Estrutura
 
 ```
-Coupler-Install/
-├── install.bash            ← ★ entrada: baixa (git recursivo) E instala
-├── build.bash              ← orquestra as 3 etapas (sistema já baixado)
-├── include.bash            ← biblioteca de funções (log, timer, clone, resolvedores)
-├── 1-install-monan.bash    ← etapa 1 — MONAN-A 2.0 → lib/monan2, mod/monan2
-├── 2-install-mom.bash      ← etapa 2 — MOM6+SIS2+FMS → lib/{fms,mom6,nuopc}
+Coupler-Install/            ← scripts de instalação (standalone)
+├── install.bash            ← ★ baixa (git recursivo) e instala
+├── build.bash              ← só as 3 etapas (já baixado)
+├── include.bash            ← biblioteca de funções (sourced)
+├── 1-install-monan.bash    ← etapa 1 — MONAN-A 2.0
+├── 2-install-mom.bash      ← etapa 2 — MOM6+SIS2+FMS
 ├── 3-install-coupler.bash  ← etapa 3 — linka bin/esmApp
-├── sites/                  ← configuração por máquina (ESMF, módulos, alvos)
-│   └── site-jaci.bash      ← Jaci (Cray XD2000 / PrgEnv-gnu) — padrão
+├── sites/                  ← config por máquina
+│   └── site-jaci.bash      ← Jaci (padrão)
 └── templates/              ← templates de build
     └── cray-gnu-monan.mk   ← template mkmf Cray/GNU
 ```
@@ -62,7 +78,7 @@ Como o instalador vive fora da árvore do acoplador, os scripts localizam o que
 precisam por busca em vários locais (primeiro que existir vence):
 
 - **Raiz do acoplador** (`COUPLER_ROOT`): ambiente → `./MONAN-Coupler`.
-- **Sítio** (`site-jaci.bash`): `$SITE_ENV` → `sites/` → raiz → `install/` → `<COUPLER_ROOT>/install/`.
+- **Sítio** (`site-jaci.bash`): `$SITE_ENV` → `sites/` → raiz → `install/` → `<COUPLER_ROOT>/run/setenv-site.bash` → `<COUPLER_ROOT>/install/` (legado).
 - **Template** (`cray-gnu-monan.mk`): `$MKMF_TEMPLATE_SRC` → `templates/` → raiz → `install/templates/` → `<COUPLER_ROOT>/install/templates/`.
 
 O `install.bash` confere **sítio e template antes do clone** (preflight),
