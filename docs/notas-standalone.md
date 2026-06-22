@@ -52,9 +52,9 @@ Coupler-Install/
 ├── install.bash            ← ★ entrada: baixa (git recursivo) E instala
 ├── build.bash              ← só as 3 etapas (sistema já baixado)
 ├── include.bash            ← biblioteca de funções (sourced)
-├── 1-install-monan.bash    ← etapa 1 — MONAN-A 2.0
-├── 2-install-mom.bash      ← etapa 2 — MOM6+SIS2+FMS
-├── 3-install-coupler.bash  ← etapa 3 — linka bin/esmApp
+├── 1-monan.bash            ← etapa 1 — MONAN-A 2.0
+├── 2-mom.bash              ← etapa 2 — MOM6+SIS2+FMS
+├── 3-coupler.bash          ← etapa 3 — linka bin/esmApp
 ├── sites/site-jaci.bash    ← configuração por máquina
 ├── templates/cray-gnu-monan.mk
 ├── README.md

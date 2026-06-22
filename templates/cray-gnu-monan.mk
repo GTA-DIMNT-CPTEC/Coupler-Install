@@ -5,7 +5,7 @@
 # Template canônico do projeto, versionado FORA do submódulo MOM6-examples para
 # sobreviver a 'git clone --recursive'. Livre de caminhos pessoais: NetCDF/HDF5
 # via módulos cray-* (nc-config/nf-config), YAML via pkg-config, ESMF via
-# esmf.mk no Passo 3. Usado por install/2-install-mom.bash (TEMPLATE_MK;
+# esmf.mk no Passo 3. Usado por 2-mom.bash (TEMPLATE_MK;
 # sobreponível com MKMF_TEMPLATE_SRC).
 #
 # Origem: cray-gnu.mk (template GCC/Cray do FMS), auditado e relocado sem
