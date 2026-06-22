@@ -27,6 +27,11 @@ Opções: `--coupler-root DIR`, `--branch BRANCH`, `--no-install` (só baixa),
 `--from N` / `--only N` (repassadas ao `build.bash`). Veja todas com
 `bash install.bash --help`.
 
+Há também atalhos via `make` (camada fina sobre os scripts): `make` (= baixa +
+instala), `make download`, `make build FROM=2`, `make check` (sanidade) e
+`make help`. *Não confunda com o Makefile do `MONAN-Coupler`, que é o build real
+do `bin/esmApp`; este aqui é só um lançador de comandos.*
+
 Ao final, o executável fica em `<COUPLER_ROOT>/bin/esmApp`. Nas sessões
 seguintes, a partir da raiz do sistema acoplado, basta recompilar/submeter sem o
 instalador:
@@ -40,17 +45,24 @@ bash run/run_esmApp.jaci -n 128 # submete via PBS (128 PETs)
 ## Estrutura
 
 ```
-Coupler-Install/            ← scripts de instalação (standalone)
-├── install.bash            ← ★ baixa (git recursivo) e instala
-├── build.bash              ← só as 3 etapas (já baixado)
-├── include.bash            ← biblioteca de funções (sourced)
-├── 1-install-monan.bash    ← etapa 1 — MONAN-A 2.0
-├── 2-install-mom.bash      ← etapa 2 — MOM6+SIS2+FMS
-├── 3-install-coupler.bash  ← etapa 3 — linka bin/esmApp
-├── sites/                  ← config por máquina
-│   └── site-jaci.bash      ← Jaci (padrão)
-└── templates/              ← templates de build
-    └── cray-gnu-monan.mk   ← template mkmf Cray/GNU
+Coupler-Install/             ← scripts de instalação (standalone)
+├── Makefile                 ← atalhos: make / make build / make check
+├── install.bash             ← ★ baixa (git recursivo) e instala
+├── build.bash               ← só as 3 etapas (já baixado)
+├── include.bash             ← biblioteca de funções (sourced)
+├── 1-monan.bash             ← etapa 1 — MONAN-A 2.0
+├── 2-mom.bash               ← etapa 2 — MOM6+SIS2+FMS
+├── 3-coupler.bash           ← etapa 3 — linka bin/esmApp
+├── sites/                   ← config por máquina
+│   ├── site-jaci.bash       ← Jaci (padrão)
+│   └── site-template.bash   ← esqueleto p/ nova máquina
+├── templates/               ← templates de build
+│   └── cray-gnu-monan.mk    ← template mkmf Cray/GNU
+├── docs/                    ← documentação
+│   ├── CHANGELOG.md         ← histórico do instalador
+│   └── notas-standalone.md  ← notas de design (separação)
+├── README.md
+└── .gitignore
 ```
 
 `install.bash` = baixar + instalar (a partir do nada, um comando).
@@ -66,7 +78,7 @@ encontram esses arquivos automaticamente — veja "Resolução de caminhos".
 | Quero…                              | Edite / use                                        |
 |:------------------------------------|:---------------------------------------------------|
 | Trocar ESMF, módulos, alvo de CPU   | `sites/site-jaci.bash`                             |
-| Rodar em outra máquina              | copie `sites/site-jaci.bash` → `sites/site-X.bash` e `export SITE_ENV=sites/site-X.bash` |
+| Rodar em outra máquina              | copie `sites/site-template.bash` → `sites/site-X.bash`, ajuste e `export SITE_ENV=sites/site-X.bash` |
 | Ajuste pontual sem editar arquivo   | `export VAR=valor` antes (tem prioridade sobre o sítio) |
 | Outro template mkmf                 | `export MKMF_TEMPLATE_SRC=/caminho/template.mk`   |
 | Outra raiz para o acoplador         | `--coupler-root DIR` ou `export COUPLER_ROOT=DIR` |
@@ -93,7 +105,9 @@ Com o sistema já baixado e `COUPLER_ROOT` exportado:
 
 ```bash
 export COUPLER_ROOT=/caminho/MONAN-Coupler
-bash build.bash --from 2        # retoma a partir da etapa 2
-bash 2-install-mom.bash --only-nuopc  # só o cap NUOPC do MOM6
-bash 1-install-monan.bash --skip-init-atm
+bash build.bash --from 2          # retoma a partir da etapa 2   (= make build FROM=2)
+bash 2-mom.bash --only-nuopc      # só o cap NUOPC do MOM6
+bash 1-monan.bash --skip-init-atm # só o core atmosphere
 ```
+
+Equivalentes diretos via `make`: `make monan`, `make mom`, `make coupler`.

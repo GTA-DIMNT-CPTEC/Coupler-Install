@@ -72,7 +72,7 @@ if [[ "${ONLY_STEP}" != 0 ]] && ! [[ "${ONLY_STEP}" =~ ^[1-3]$ ]]; then
 fi
 
 # ── Etapas ────────────────────────────────────────────────────────────────────
-declare -a STEP_SCRIPTS=( "" "1-install-monan.bash" "2-install-mom.bash" "3-install-coupler.bash" )
+declare -a STEP_SCRIPTS=( "" "1-monan.bash" "2-mom.bash" "3-coupler.bash" )
 declare -a STEP_LABELS=( "" "MONAN-A 2.0 (MPAS-A 8.3.1)" "MOM6+SIS2 + FMS + cap NUOPC" "Acoplador (bin/esmApp)" )
 TOTAL_STEPS=3
 
