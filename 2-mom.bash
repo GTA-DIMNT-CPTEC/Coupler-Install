@@ -114,20 +114,36 @@ if [[ ! -f "${ESMFMKFILE}" ]]; then
 fi
 
 # Extrai uma variável (já expandida) do esmf.mk, deixando o make resolver
-# referências internas. Uso: _esmf_mk ESMF_LIBDIR
+# referências internas. Usado no Passo 3 (flags canônicas do cap NUOPC).
+# Uso: _esmf_mk ESMF_F90COMPILEPATHS
 _esmf_mk() {
   printf 'include %s\n_v:\n\t@echo $(%s)\n' "${ESMFMKFILE}" "$1" | make -s -f - _v 2>/dev/null
 }
 
-# Disponibiliza apps e bibliotecas do ESMF em tempo de build/execução.
-# Atribui antes de exportar para não mascarar falha de _esmf_mk (SC2155); o
-# sufixo ${VAR:+:${VAR}} evita ':' inicial/final (que poria '.' no caminho).
+# Bibliotecas do ESMF em runtime (LD_LIBRARY_PATH). ESMF_LIBDIR é derivado de
+# forma robusta pela config de sítio (sites/site-jaci.bash) — fonte única — e
+# não pela variável ESMF_LIBDIR do esmf.mk, que não existe em todo build do
+# ESMF. Aqui apenas o consumimos. O sufixo ${VAR:+:${VAR}} evita ':' inicial/
+# final (que poria '.' no caminho).
+if ! check_var ESMF_LIBDIR; then
+  log_error "ESMF_LIBDIR ausente — a config de sítio derivou o ESMF?"
+  log_info  "Confira ESMFMKFILE em ${SITE_ENV} e a instalação do ESMF 8.9.1."
+  log_info  "(Sítio antigo? Atualize sites/site-jaci.bash com a derivação do ESMF.)"
+  exit 1
+fi
+export LD_LIBRARY_PATH="${ESMF_LIBDIR}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+
+# Apps do ESMF (ESMF_RegridWeightGen etc.): úteis em runtime/pós-proc, não na
+# compilação. ESMF_APPSDIR nem sempre é exposto pelo esmf.mk; se vier vazio,
+# apenas não o adicionamos ao PATH (não é fatal para o build).
 _esmf_appsdir="$(_esmf_mk ESMF_APPSDIR)"
-_esmf_libdir="$(_esmf_mk ESMF_LIBDIR)"
-export PATH="${_esmf_appsdir}${PATH:+:${PATH}}"
-export LD_LIBRARY_PATH="${_esmf_libdir}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
-unset _esmf_appsdir _esmf_libdir
-log_ok "ESMF via ${ESMFMKFILE}"
+if [[ -n "${_esmf_appsdir}" ]]; then
+  export PATH="${_esmf_appsdir}${PATH:+:${PATH}}"
+else
+  log_warn "ESMF_APPSDIR não exposto pelo esmf.mk — apps do ESMF fora do PATH (ok para compilar)."
+fi
+unset _esmf_appsdir
+log_ok "ESMF via ${ESMFMKFILE}  (LIBDIR=${ESMF_LIBDIR})"
 
 # Wrappers Cray (valores definidos em site-jaci.bash; nunca gfortran/gcc direto).
 export FC CC LD

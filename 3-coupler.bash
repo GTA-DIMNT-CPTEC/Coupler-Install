@@ -63,6 +63,9 @@ if ! resolve_site_env "${SCRIPT_DIR}"; then
 fi
 log_info "Config de sítio: ${SITE_ENV}"
 
+# O run/setenv-gnu.bash carrega os módulos do ambiente (PrgEnv-gnu + libs, via
+# MODULES_MONAN do sítio) e define os caminhos de ESMF/MPAS/MOM6. Por isso não
+# repetimos 'load_modules' aqui — o ambiente vem inteiro do setenv.
 SETENV="${COUPLER_ROOT}/run/setenv-gnu.bash"
 if [[ ! -f "${SETENV}" ]]; then
   log_error "Arquivo de ambiente não encontrado: ${SETENV}"
@@ -75,6 +78,17 @@ if ! check_var ESMFMKFILE MPAS_DIR; then
   log_error "Ambiente incompleto após source de ${SETENV}"
   exit 1
 fi
+
+# Guarda de toolchain: confirma que o PrgEnv-gnu ficou ativo (PE_ENV=GNU, var
+# padrão do Cray PE). Sem isto, o 'ftn' acionaria o compilador Cray (CCE) e
+# rejeitaria os flags GNU do Makefile (-mcmodel=small, -ffree-line-length-none,
+# …). Protege contra um setenv-gnu.bash antigo que não carregue os módulos.
+if [[ "${PE_ENV:-}" != "GNU" ]]; then
+  log_error "PrgEnv-gnu não está ativo (PE_ENV=${PE_ENV:-<vazio>}) — o 'ftn' usaria o compilador Cray."
+  log_info  "Atualize ${SETENV} para carregar MODULES_MONAN, ou carregue PrgEnv-gnu à mão."
+  exit 1
+fi
+log_ok "Toolchain GNU ativa (PE_ENV=GNU)"
 
 # ── Compilação ────────────────────────────────────────────────────────────────
 cd "${COUPLER_ROOT}"

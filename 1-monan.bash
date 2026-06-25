@@ -124,6 +124,23 @@ if [[ -z "${NETCDF_DIR:-}" ]]; then
 fi
 export NETCDF="${NETCDF_DIR}"
 
+# ── ESMF 8.9.1 externo (acoplador) ────────────────────────────────────────────
+# ESMF_MOD (dir do esmf.mod) e ESMF_LIBDIR (dir da libesmf.a) são derivados do
+# esmf.mk na config de sítio (sites/site-jaci.bash) — fonte única. O alvo
+# gfortran-coupler-xd2000 compila com -DMPAS_EXTERNAL_ESMF_LIB e o Makefile do
+# MONAN-Model injeta -I$(ESMF_MOD) (à frente do stub src/external/esmf_time_f90)
+# e -L$(ESMF_LIBDIR) -lesmf a partir delas. Sem essas variáveis o 'use ESMF'
+# cairia no stub e a compilação falharia em timeStringISOFrac (ESMF_TimeGet) e
+# no keyword h= (ESMF_TimeIntervalGet). Aqui apenas conferimos a presença.
+if ! check_var ESMF_MOD ESMF_LIBDIR; then
+  log_error "ESMF_MOD/ESMF_LIBDIR ausentes — a config de sítio derivou o ESMF?"
+  log_info  "Confira ESMFMKFILE em ${SITE_ENV} e a instalação do ESMF 8.9.1."
+  log_info  "(Sítio antigo? Atualize sites/site-jaci.bash com a derivação do ESMF.)"
+  exit 1
+fi
+log_ok "ESMF externo  ESMF_MOD=${ESMF_MOD}"
+log_ok "ESMF externo  ESMF_LIBDIR=${ESMF_LIBDIR}"
+
 cd "${MONAN_MODEL}"
 
 # Flags de compilação — comuns aos dois cores (array: expansão segura, sem

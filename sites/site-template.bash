@@ -25,6 +25,40 @@
 : "${ESMFMKFILE:=${ESMF_ROOT}/lib/libO/<config-esmf>/esmf.mk}"      # <<< AJUSTE >>>
 export ESMF_ROOT ESMFMKFILE
 
+# ── ESMF: diretórios de módulos e bibliotecas (derivados do esmf.mk) ──────────
+# NÃO precisa ajustar: deriva ESMF_MOD (dir do esmf.mod) e ESMF_LIBDIR (dir da
+# libesmf.a) a partir do ESMFMKFILE acima — fonte única de verdade do ESMF. O
+# build do acoplador (MONAN-A com -DMPAS_EXTERNAL_ESMF_LIB) exige essas duas
+# variáveis no ambiente; sem elas o 'use ESMF' cairia no stub interno do MPAS.
+# Respeita override (só deriva o que ainda não estiver definido) e é
+# auto-contido (o setenv do acoplador faz source desta config diretamente).
+if [[ -f "${ESMFMKFILE}" ]]; then
+  _esmf_mk_get() {
+    printf 'include %s\n_v:\n\t@echo $(%s)\n' "${ESMFMKFILE}" "$1" \
+      | make -s -f - _v 2>/dev/null
+  }
+  # ESMF_MOD — diretório do esmf.mod (entre os -I de ESMF_F90COMPILEPATHS).
+  if [[ -z "${ESMF_MOD:-}" ]]; then
+    for _p in $(_esmf_mk_get ESMF_F90COMPILEPATHS); do
+      _p="${_p#-I}"
+      if [[ -f "${_p}/esmf.mod" ]]; then ESMF_MOD="${_p}"; break; fi
+    done
+  fi
+  # ESMF_LIBDIR — diretório da libesmf, via -L canônico (ESMF_F90LINKPATHS) e,
+  # como rede de segurança, o diretório do próprio esmf.mk. Não usamos a
+  # variável ESMF_LIBDIR do esmf.mk: ela não existe em todo build do ESMF.
+  if [[ -z "${ESMF_LIBDIR:-}" ]]; then
+    for _p in $(_esmf_mk_get ESMF_F90LINKPATHS); do
+      _p="${_p#-L}"
+      if [[ -e "${_p}/libesmf.a" || -e "${_p}/libesmf.so" ]]; then ESMF_LIBDIR="${_p}"; break; fi
+    done
+    [[ -z "${ESMF_LIBDIR:-}" ]] && ESMF_LIBDIR="$(cd "$(dirname "${ESMFMKFILE}")" && pwd)"
+  fi
+  unset _p
+  unset -f _esmf_mk_get
+  export ESMF_LIBDIR ESMF_MOD
+fi
+
 # ── Paralelismo de compilação ────────────────────────────────────────────────
 # Jobs do 'make -j'. Para usar todos os núcleos: export MAKE_JOBS=$(nproc).
 : "${MAKE_JOBS:=8}"
