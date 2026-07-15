@@ -42,6 +42,159 @@ make                            # (re)compila bin/esmApp
 bash run/run_esmApp.jaci -n 128 # submete via PBS (128 PETs)
 ```
 
+## Modos de execução (particionamento de PETs)
+
+O particionamento dos PETs (ranks MPI) entre os componentes é controlado pelo
+grupo `&nuopc_petlayout` em `nuopc.input`:
+
+- **`sequential`** (padrão): `MPAS`, `MED` e `OCN` rodam em **todos os PETs**,
+  um componente de cada vez. Throughput máximo por componente; atmosfera e
+  oceano não se sobrepõem no tempo. Retrocompatível com versões anteriores.
+- **`concurrent`**: `ATM` e `OCN` ocupam **blocos disjuntos de PETs** e avançam
+  **em paralelo** (wall-clock); o `MED` permanece em todos os PETs. O tempo por
+  passo passa de `t_ATM + t_OCN` para `max(t_ATM, t_OCN)`.
+
+```fortran
+! Exemplo concurrent com 128 PETs (nuopc.input):
+&nuopc_petlayout
+  coupling_mode = 'concurrent'
+  atm_pet_count = 88     ! MPAS  → PET 0..87
+  ocn_pet_count = 40     ! MOM6  → PET 88..127  (soma = 128 = -n)
+/
+```
+
+Em `concurrent`, `atm_pet_count + ocn_pet_count` deve ser igual ao total de PETs
+(`-n`); com `0` em um dos dois, o outro é completado automaticamente. Dimensione
+a razão ATM:OCN pelo custo relativo (o MPAS costuma dominar — ponto de partida
+~2:1 a ~3:1) e rebalanceie medindo o tempo de cada componente em
+`logs/PET*.esmApp.log`. O modo funciona nas Fases 1 (DOCN) e 2 (MOM6); o ganho é
+maior na Fase 2.
+
+### Partições METIS do MPAS (`gen-metis.bash`)
+
+O MPAS decompõe a malha por METIS e lê `x1.NNNNN.graph.info.part.N`, onde **N é o
+número de tarefas MPI no comunicador do MPAS** — não o total do job. Em
+`sequential`, `N = NPES` (o `-n`); em `concurrent`, `N = atm_pet_count`. O MOM6
+não usa METIS (decompõe a própria grade lógica por *layout*).
+
+O script `run/gen-metis.bash` gera as partições necessárias lendo malha e modo da
+`nuopc.input`:
+
+```bash
+cd /…/exp1
+gen-metis.bash -n 8                 # deriva o que falta da nuopc.input
+gen-metis.bash --parts "8 4 16"     # gera exatamente esses N
+gen-metis.bash -n 8 --dry-run       # mostra o que faria, sem gerar
+```
+
+> Pegadinha do modo concorrente: o `run_esmApp.jaci` faz o pré-check por `-n`
+> (pede `.part.<NPES>`), mas o MPAS em `concurrent` usa `.part.<atm_pet_count>`.
+> Por isso, nesse modo, o `gen-metis.bash` gera **os dois** — ex.: `-n 8` com
+> `atm_pet_count=4` gera `.part.8` (pré-check) e `.part.4` (MPAS em execução).
+
+Desde a v13.0 o `run_esmApp.jaci` já resolve isso sozinho: o pré-check tornou-se
+ciente do layout — em `concurrent` ele exige/gera diretamente
+`.part.<atm_pet_count>` (o número que o MPAS realmente usa), chama o
+`gen-metis.bash` para gerar a partição que faltar, e **aborta** se
+`-n ≠ atm_pet_count + ocn_pet_count`. Assim, o fluxo volta a ser um único
+`run_esmApp.jaci -n N`. O `gen-metis.bash` continua útil para gerar partições
+avulsas (estudos de escalabilidade) ou fora do `run_esmApp.jaci`.
+
+### Smoke test do modo concorrente
+
+O script `run/test-concurrent.bash` faz uma verificação rápida de que o modo
+concorrente reparte os PETs, inicializa os três componentes e **avança o primeiro
+passo de acoplamento sem travar** nos `MPI_Allreduce` coletivos (o cenário de
+deadlock). Ele não altera o seu `nuopc.input` — gera uma cópia de teste injetada
+via `NUOPC_INPUT` e usa diretórios de log/diagnóstico isolados.
+
+Segue o **mesmo padrão dual-mode do `run_esmApp.jaci`** (detecção por
+`PBS_O_WORKDIR`): no nó de login gera um `.pbs` e faz `qsub`; dentro do job
+carrega os módulos, faz `source` do `setenv` e roda o teste (lançador PALS
+`mpiexec` + watchdog). `COUPLER_ROOT` é autodeduzido; o executável vem de
+`<COUPLER_ROOT>/bin/esmApp` e o experimento é o diretório atual.
+
+```bash
+export PATH="$PATH:/…/MONAN-Coupler/run"          # uma vez
+
+cd /…/exp1                                         # entradas do run
+test-concurrent.bash -n 8                          # submete via qsub (4 ATM / 4 OCN)
+test-concurrent.bash -n 128 --atm 88 --ocn 40 -w 00:20:00
+test-concurrent.bash -n 8 --local                  # execução direta (sessão interativa qsub -I)
+test-concurrent.bash -n 8 --dry-run                # gera o .pbs e mostra o comando, sem submeter
+```
+
+Diretivas PBS específicas do sítio são sobrescrevíveis: `--queue`, `--account`,
+`--ncpus-node` (padrão 128, para calcular `select`) e `--select` (linha inteira).
+Ajuste-as conforme a política da Jaci / o seu `run_esmApp.jaci`.
+
+O teste encerra assim que o mediador grava o primeiro NetCDF de diagnóstico
+(prova de que os coletivos do passo 1 passaram). Se nenhum arquivo surgir dentro
+das janelas de estagnação/tempo-limite (processo vivo, parado num coletivo), o
+veredito é *provável deadlock*, com o *tail* dos logs de cada PET. Veja
+`test-concurrent.bash --help` para todas as opções.
+
+### Calibração da partição (`analisa_balanceamento_pets.py`)
+
+Depois de uma execução concorrente (ou sequencial, como baseline), o script
+`run/analisa_balanceamento_pets.py` lê os `logs/PET*.esmApp.log`, mede o tempo
+de parede de cada componente e sugere `atm_pet_count`/`ocn_pet_count`
+balanceados para a próxima rodada:
+
+```bash
+python3 run/analisa_balanceamento_pets.py --logdir logs
+
+python3 run/analisa_balanceamento_pets.py --logdir logs \
+  --csv-out tempos.csv --json-out resumo.json --plot-out balanceamento.png
+
+python3 run/analisa_balanceamento_pets.py --logdir logs --target-pets 128
+python3 run/analisa_balanceamento_pets.py --logdir logs --baseline-json resumo_anterior.json
+```
+
+Pontos importantes de como ele mede:
+
+- **Soma o tempo total de cada componente**, nunca "conta de chamadas × passos"
+  — o MOM6 subcicla internamente (já observamos de ~2 a ~301 chamadas `Run`
+  internas por passo de acoplamento, a depender da configuração), enquanto o
+  MPAS costuma ter uma chamada por passo. O nº de passos usado na divisão vem
+  de `--steps`, ou é autodetectado em `esmApp_run.log`.
+- **Detecta a partição de PETs de duas formas**: lendo a linha
+  `ESM: modo CONCURRENT — ATM=PET[...] OCN=PET[...]` do log (nível INFO) ou,
+  se ausente — caso comum ao usar `ESMF_LOGKIND_Multi_On_Error` em produção,
+  que suprime mensagens INFO —, **infere** os grupos a partir de quais PETs
+  reportam atividade de MPAS/OCN.
+- **Sugestão de partição**: assume escalonamento aproximadamente linear
+  (`tempo ≈ trabalho / nº PETs`) para estimar `atm_pet_count`/`ocn_pet_count`
+  que equilibrem `t_ATM` e `t_OCN` — uma aproximação de primeira ordem, a
+  validar com uma nova execução concorrente real, não um resultado exato.
+- Também funciona sobre logs de uma execução **sequencial**, extrapolando os
+  custos medidos para sugerir uma partição inicial antes do primeiro teste
+  concorrente.
+
+Veja `analisa_balanceamento_pets.py --help` para todas as opções.
+
+### Nível de log ESMF (`log_kind`)
+
+O grupo `&nuopc_driver` do `nuopc.input` controla o nível de detalhe do log
+ESMF por PET (`logs/PET*.esmApp.log`) sem precisar recompilar:
+
+```fortran
+&nuopc_driver
+  ...
+  log_kind = 'multi'  ! 'multi' (calibração) | 'multi_on_error' (produção)
+/
+```
+
+- **`multi`** (padrão): grava todas as mensagens, inclusive INFO — é o que
+  `test-concurrent.bash` e `analisa_balanceamento_pets.py` precisam para medir
+  tempo por componente/passo. Use durante calibração/testes.
+- **`multi_on_error`**: log só é materializado em caso de erro — mais rápido
+  e com arquivos bem menores. **Atenção**: numa execução *bem-sucedida*,
+  `logs/PET*.esmApp.log` pode ficar incompleto ou ausente (o log ESMF só é
+  aberto no momento do erro, quando o `chdir` de volta ao diretório do
+  experimento já ocorreu). Reserve para produção já calibrada, quando não for
+  mais preciso medir tempo por passo.
+
 ## Estrutura
 
 ```
