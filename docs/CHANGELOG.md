@@ -5,120 +5,116 @@ Histórico de versões do instalador do sistema acoplado
 INPE / CGCT / DIMNT — GT Acoplamento de Modelos.
 
 O formato segue, de modo simplificado, *Keep a Changelog*; as datas são
-aproximadas (iterações de desenvolvimento, Jun 2026).
+aproximadas (iterações de desenvolvimento, Jun a Jul 2026).
 
 ## [Não lançado]
 
-- **Funcionalidade (`log_kind` configurável — `&nuopc_driver`).** O nível de
-  log ESMF por PET passou a ser escolhido em `nuopc.input`, sem recompilar:
-  `log_kind = 'multi'` (padrão, grava tudo incl. INFO — necessário para
-  `test-concurrent.bash` e `analisa_balanceamento_pets.py`) ou
-  `log_kind = 'multi_on_error'` (log só materializado em caso de erro — mais
-  rápido, porém uma execução bem-sucedida pode deixar
-  `logs/PET*.esmApp.log` incompleto/ausente, dado o `chdir` de volta ao
-  diretório do experimento já ter ocorrido quando o log seria aberto).
-  - `mpas_cap_config.F90`: novo campo `cfg_log_kind` no grupo
-    `&nuopc_driver` (leitura, validação `multi|multi_on_error`, aviso
-    explícito do risco acima quando `multi_on_error` é escolhido, impressão
-    em `config_print`).
-  - `esmApp.F90`: novo `type(ESMF_LogKind_Flag) :: esmfLogKind`, escolhido a
-    partir de `cfg_log_kind` e passado a `ESMF_Initialize` (antes, o valor
-    `ESMF_LOGKIND_MULTI` era fixo no código-fonte).
-  - `nuopc.input`: `log_kind` documentado e adicionado ao grupo
-    `&nuopc_driver`.
+- **Correção (`mom_cap_MONAN.F90`): campos de importação sem estampilha de
+  tempo.** No primeiro passo de acoplamento, o `CheckImportTolerant` comparava
+  o `TimeStamp` de cada campo importado sem que ele tivesse sido definido: na
+  RunSequence o OCN roda antes do conector MED para OCN, e o
+  `NUOPC_GetTimestamp` do NUOPC 8.9.1 retorna `ESMF_SUCCESS` sem preencher o
+  `ESMF_Time` (não existe o argumento `isValid=`). O resultado eram dois
+  `ERROR` por campo (`ESMF_TimeLT` e `ESMF_TimeGT`, "Object Set or SetDefault
+  method not called"), 28 linhas por execução com 14 campos importados. Sem
+  efeito numérico, mas poluindo o log e mascarando erros reais. A
+  `InitializeDataComplete` passa a estampilhar os campos de importação com
+  `startTime`, como já fazia com os de exportação.
+- **Correção (`domain-mom6.bash`): saída incoerente em `--no-mask`.** A coluna
+  `PETs` da tabela de candidatos era sempre calculada como
+  `NIPROC * NJPROC - Nmask`, mesmo em `--no-mask`, exibindo 121 para o `16x8`
+  quando o resultado efetivo, informado três linhas abaixo, era 128. Agora a
+  coluna respeita o modo, o rótulo da coluna de blocos secos alterna entre
+  `MASCAR.` (eliminados) e `SECOS` (mantidos), e uma nota sob a tabela explicita
+  que em `--no-mask` a contagem é informativa. Corrigido também o exemplo do
+  `--help` e do cabeçalho, que apresentava `--target-eff` como receita para um
+  run concorrente, justamente a configuração incompatível com o cap; o exemplo
+  do acoplado passa a usar `--no-mask --pes N`, e o do `--target-eff` fica
+  identificado como standalone. Colunas documentadas em `docs/domain-mom6.md`,
+  seção 7.2.
+- **Ressalva em aberto (`domain-mom6.bash`): convenção de fronteiras difere da
+  do FMS.** O script distribui as sobras da divisão nos primeiros blocos; o
+  `mpp_compute_extent` as distribui simetricamente (`Y-AXIS = 53 52 53` para
+  158 pontos em 3 blocos, contra `53 53 52` do script). As fronteiras internas
+  ficam deslocadas em um ponto e o conjunto de blocos secos pode divergir: em
+  `15x9` o script marca `(8,8)` onde o FMS teria `(9,7)`. **No acoplado com
+  `--no-mask` o efeito é nulo** (nenhum `mask_table` é lido); no uso standalone,
+  porém, um bloco com oceano pode ser mascarado por engano. A distribuição
+  simétrica está comprovada pelo log, mas o algoritmo exato ainda não foi
+  conferido contra o fonte do `mpp_domains_mod`. Documentado em
+  `docs/domain-mom6.md`, seção 5.
+- **Documentação.** Novo `docs/mascara-cap-nuopc.md`, explicação didática e
+  autocontida do problema da máscara: glossário PE/PET/DE, por que o split de
+  comunicador não está envolvido, a diferença entre representação densa e
+  esparsa no ESMF, como reconhecer o sintoma e as duas rotas de correção do
+  cap, com a estimativa de ganho por número de PETs. A seção 2 do
+  `docs/domain-mom6.md` foi reduzida a um resumo com ponteiro para ele.
+- **Correção (incidente do LAYOUT 43x3, 22/07/2026).** Run de 256 PETs em modo
+  concorrente (128 ATM + 128 OCN) abortava com SIGSEGV no PET 171 logo após
+  `COMPLETED MOM INITIALIZATION`. Causa: o `mask_table` gerado para
+  `LAYOUT = 43, 3` remove o bloco `(1,3)` da decomposição, e o cap NUOPC do
+  MOM6 monta o `deBlockList` do `ESMF_Grid` apenas com os domínios dos PETs
+  vivos. O espaço de índices `[1..180] x [1..158]` fica com um buraco de
+  5 x 53 células; `ESMF_DistGridCreate` e `ESMF_GridCreate` aceitam em
+  silêncio, e a falha só emerge no conector `OCN-TO-MED`, em
+  `ESMF_GridToMesh`: `ESMCI_Mesh.C, line:1786: Bad processor number!`.
+  - Configuração corrigida: `LAYOUT = 16, 8` (produto exato = 128 PETs do OCN)
+    com `MASKTABLE` comentado em `MOM_input` e `SIS_input`.
+  - `domain-mom6.bash`: **filtro de forma** com `--min-tile` (padrão 9, que é
+    `2*NIHALO+1`, o halo do domínio `MOM_MOSAIC`) e `--max-aspect` (padrão
+    4,0). O `43x3` tinha blocos de 4,2 pontos, menores que o próprio halo, e
+    passava sem qualquer alerta.
+  - `domain-mom6.bash`: a varredura do `--target-eff` deixa de aceitar o
+    primeiro `EFF` que bate. O novo modo `scan` do awk devolve todos os pares
+    de fatores aprovados no filtro para cada nº de blocos, e vence o de melhor
+    forma em **toda** a faixa. Na grade 180 x 158, o alvo 128 passa a resolver
+    para `15x9` (blocos de 12,0 x 17,6; nmask = 7) em vez de `43x3`.
+  - `domain-mom6.bash`: novo `--no-mask`, que escolhe o melhor `LAYOUT` com
+    produto exatamente igual aos PETs do oceano e não gera `mask_table`,
+    comentando com `!` uma diretiva `MASKTABLE` remanescente nos arquivos de
+    entrada. É o único modo compatível com o cap NUOPC atual.
+  - `domain-mom6.bash`: aviso explícito sempre que um `mask_table` com
+    `nmask > 0` é produzido, indicando que ele serve ao MOM6+SIS2 standalone,
+    não ao acoplado.
+  - Pendência em `mom_cap_MONAN.F90`: para suportar `mask_table`, o
+    `deBlockList` precisa cobrir todo o espaço de índices, com DEs adicionais
+    para os blocos mascarados mapeados a PETs existentes via `petMap`
+    (o `ESMF_DELayout` aceita mais de um DE por PET).
+- **Novo utilitário (`domain-mom6.bash`): decomposição de domínio do MOM6+SIS2.**
+  Calcula um `LAYOUT` (NIPROC, NJPROC) equilibrado e gera o `mask_table` do FMS,
+  eliminando os blocos 100% terra. Os PETs efetivos passam a ser
+  `EFF = NIPROC * NJPROC - Nmask`, valor que deve casar com os PETs que o
+  oceano realmente recebe (o total do run em `sequential`; apenas
+  `ocn_pet_count` em `concurrent`), evitando o erro fatal
+  `fms2_io(parse_mask_table_2d): mpp_npes() .NE. layout(1)*layout(2) - nmask`.
+  - Três modos: `--pes N` (fatora N e ordena os candidatos por razão de aspecto,
+    divisão exata e tamanho mínimo de bloco), `--layout NI,NJ` (explícito) e
+    `--target-eff N` (varre `--pes N..N+search-range` até obter `EFF` exato,
+    já que o nº de blocos mascarados depende da **forma** do `LAYOUT`, não só
+    do produto).
+  - Implementação **100% shell**: `ncdump` (módulo `cray-netcdf`) e `awk`
+    (POSIX), sem dependência de Python, numpy ou netCDF4. Não depende do
+    `COUPLER_ROOT` nem do ESMF: opera apenas sobre a topografia.
+  - Núcleo: **soma de prefixos 2D** (imagem integral) do campo binário de
+    oceano, construída uma única vez; a contagem de oceano em cada bloco
+    candidato custa O(1), o que viabiliza a varredura do `--target-eff`.
+  - Detecção automática da variável (`depth`, `D`, `wet`, `mask`, ou
+    `--depth-var`) e das dimensões pelas duas últimas da declaração (robusto a
+    `ny,nx` / `lat,lon` / `grid_y,grid_x`). Limiar de oceano por `--min-depth`
+    para profundidade e 0,5 para máscara.
+  - Integração opcional com o experimento: `--input-dir` copia o `mask_table`
+    para `INPUT/`; `--mom-input`/`--sis-input` reescrevem `LAYOUT` e
+    `MASKTABLE` com backup `.bak.<timestamp>`; `--dry-run` suprime cópia e
+    edição (o `mask_table`, sendo o próprio resultado do cálculo, ainda é
+    gravado). Avisos para blocos pequenos, divisão inexata e `Nmask = 0`.
+  - Reaproveita o `include.bash` do instalador para o log padronizado, com
+    *fallback* próprio quando ausente.
+- **Documentação.** Novo `docs/domain-mom6.md` (algoritmo detalhado: soma de
+  prefixos, escore dos candidatos, formato do `mask_table`, custo e armadilhas)
+  e `README.md` com a subseção "Decomposição de domínio do MOM6+SIS2", logo
+  após as partições METIS do MPAS, mais as entradas correspondentes na árvore
+  de estrutura e na tabela "Onde mexer".
 
-- **Funcionalidade (análise de balanceamento — `analisa_balanceamento_pets.py`).**
-  Novo script Python que lê `logs/PET*.esmApp.log`, soma o tempo total de cada
-  componente (MPAS/OCN/MED) — nunca "contagem de chamadas Run × passos", já
-  que o MOM6 subcicla internamente (observado entre ~2 e ~301 chamadas `Run`
-  por passo, a depender da configuração) — e sugere `atm_pet_count`/
-  `ocn_pet_count` balanceados, assumindo escalonamento aproximadamente linear.
-  Detecta a partição de PETs pela linha `ESM: modo CONCURRENT — ATM=PET[...]`
-  do log (nível INFO) ou, na ausência dela (comum sob
-  `ESMF_LOGKIND_Multi_On_Error`, que suprime INFO), infere os grupos a partir
-  de quais PETs reportam atividade de MPAS/OCN. Também funciona sobre logs de
-  execução sequencial, extrapolando os custos medidos para uma sugestão
-  inicial. Exporta detalhe por chamada (`--csv-out`), resumo de máquina
-  (`--json-out`, reutilizável como baseline via `--baseline-json`) e um
-  gráfico comparativo por PET (`--plot-out`). Validado com dados sintéticos
-  (incluindo log truncado/deadlock, ausência de anúncio de partição, e modo
-  sequencial) e com os logs reais da execução concorrente validada.
-
-- **Correção (deadlock real do modo concurrent — VM global na leitura OISST/JRA).**
-  Diagnóstico do travamento em `concurrent × Fase 2` (4 ATM / 4 OCN): a
-  inicialização parava no `DataInitialize` da cap do MOM6, dentro de
-  `ReadOcnFieldInterp` (`docn_cap_netcdf.F90`), reusada por
-  `set_si_ifrac_from_file` para ler o gelo do OISST. A rotina obtinha a VM com
-  `ESMF_VMGetGlobal` (todos os 8 PETs) e fazia `ESMF_VMBroadcast` coletivo com
-  `rootPet=0`; em concurrent o OCN roda só nos PETs 4–7, então apenas eles
-  entravam no broadcast (e o PET0 raiz é do ATM) → coletivo de 8 nunca fechava
-  → deadlock (job cancelado por walltime). Correção: usar a VM do COMPONENTE
-  via `ESMF_GridCompGet(gcomp, vm=vm)` — em sequential a VM do componente é
-  igual à global, mantendo o comportamento; em concurrent, o broadcast passa a
-  ser sobre os PETs do componente, com raiz local. Aplicado às três rotinas de
-  leitura de dado que tinham o mesmo padrão:
-  - `docn_cap_netcdf.F90::ReadOcnFieldInterp` (ativa — a que travava);
-  - `DOCN_cap.F90::ReadOcnFieldInterp` (DOCN Fase 1 concorrente);
-  - `DATM_cap.F90::ReadJRAFieldInterp` (teste DATM concorrente).
-  Não alterados: `MED_cap.F90::fill_ifrac_from_oisst` (o mediador roda em todos
-  os PETs, então a VM global coincide com a do componente) e `esmApp.F90` (o
-  programa principal legitimamente usa a VM global).
-
-- **Funcionalidade (particionamento de PETs — modos sequential/concurrent).**
-  Novo grupo `&nuopc_petlayout` em `nuopc.input` controla a distribuição dos
-  PETs (ranks MPI) entre os componentes, permitindo execução **sequencial**
-  (padrão, retrocompatível — todos os componentes em todos os PETs) ou
-  **concorrente** (ATM e OCN em blocos disjuntos de PETs, avançando em
-  paralelo; MED em todos).
-  - `mpas_cap_config.F90`: leitura e validação de `coupling_mode`,
-    `atm_pet_count`, `ocn_pet_count` (grupo `&nuopc_petlayout`); helper
-    `str_lower` para tolerância a maiúsculas; impressão em `config_print`.
-  - `esm.F90` (`SetModelServices`): substitui o `petList` único por
-    `atmPetList`/`ocnPetList`/`medPetList`; auto-split (metade/metade quando
-    contagens = 0) e validação `nAtm + nOcn == petCount`.
-  - `esm.F90` (`SetRunSequence`): duas novas RunSequences concorrentes
-    (Fase 1 DOCN e Fase 2 MOM6) com `MPAS`/`OCN` consecutivos em PETs
-    disjuntos (execução paralela) e lag de 1 `dt_coupling` no mediador.
-  - `nuopc.input`: grupo `&nuopc_petlayout` documentado (Grupo 7).
-  - `README.md`: seção "Modos de execução (particionamento de PETs)".
-  - `run/gen-metis.bash`: gerador de partições METIS do MPAS
-    (`x1.NNNNN.graph.info.part.N`). Lê malha e modo da `nuopc.input` e gera o
-    que falta: `.part.<NPES>` (sequential/pré-check) e, em `concurrent`,
-    também `.part.<atm_pet_count>` (usado de fato pelo MPAS). Carrega
-    `METIS/5.1.0` se preciso; pula partições já existentes; `--dry-run`,
-    `--parts`, `--force`.
-  - `run/test-concurrent.bash`: smoke test do modo concorrente — verifica
-    partição, inicialização dos três componentes e avanço do 1º passo sem
-    deadlock nos coletivos MPI (encerra ao 1º NetCDF de diagnóstico do
-    mediador; *watchdog* de estagnação detecta hang). Não altera o
-    `nuopc.input` (usa `NUOPC_INPUT` + diretórios isolados). Submissão PBS no
-    mesmo padrão dual-mode do `run_esmApp.jaci` (login → `qsub`; dentro do job
-    → módulos + `setenv` + PALS `mpiexec`); `COUPLER_ROOT` autodeduzido,
-    recursos PBS (`select`, fila, conta, cpus/nó) parametrizáveis; `--local`
-    para execução direta em sessão interativa.
-  - `run/run_esmApp.jaci`: pré-check agora é **ciente do layout de PETs**.
-    Em `concurrent`, exige/gera `x1.NNNNN.graph.info.part.<atm_pet_count>`
-    (o que o MPAS de fato usa) em vez de `.part.<NPES>`; em `sequential`
-    mantém `.part.<NPES>`. A checagem é feita pelo glob do próprio arquivo de
-    partição (robusta à ausência do graph base `x1.*.graph.info`, que só é
-    exigido para *gerar*). Gera a partição faltante automaticamente (via
-    `gen-metis.bash`). Novo *guard*: em `concurrent`, aborta o pré-check se
-    `-n ≠ atm_pet_count + ocn_pet_count`. Corrigido bug latente do
-    `_nuopc_get` (o `s/.*=.../` guloso lia o valor errado quando o comentário
-    do campo continha `=`, ex.: `atm_pet_count = 4 ! (0 = auto)`): o
-    comentário passa a ser removido antes da extração.
-  - Os caps não mudam: todos já extraem o comunicador da VM local do
-    componente (`ESMF_GridCompGet`/`ESMF_VMGetCurrent`) e reduzem sobre esse
-    comunicador, funcionando nos dois modos sem alteração.
-  - **Blindagem contra deadlock (modo concurrent).** Removidos os *fallbacks*
-    silenciosos para `MPI_COMM_WORLD` que, no modo concorrente (componente em
-    subconjunto de PETs), causariam mismatch coletivo / deadlock nos
-    `MPI_Allreduce`:
-    - `MED_cap.F90` (`InitializeRealize`): em erro de `ESMF_VMGetCurrent`/
-      `ESMF_VMGet`, aborta limpo via `ESMF_LogFoundError`+`return` em vez de
-      atribuir `med_mpi_comm = MPI_COMM_WORLD`.
-    - `mpas_cap_methods.F90` (`state_set_field_1d`, gather Voronoi): idem —
-      `ESMF_LogWrite(…ERROR)`+`return` em vez de `mpi_comm_use = MPI_COMM_WORLD`.
 - **Correção (ESMF externo no MONAN-A).** A etapa 1 falhava ao compilar
   `mpas_timekeeping.F` (`timeStringISOFrac`/`h=` não reconhecidos) porque o
   `-DMPAS_EXTERNAL_ESMF_LIB` resolvia `use ESMF` para o *stub* interno do MPAS

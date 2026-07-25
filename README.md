@@ -75,7 +75,8 @@ maior na Fase 2.
 O MPAS decompõe a malha por METIS e lê `x1.NNNNN.graph.info.part.N`, onde **N é o
 número de tarefas MPI no comunicador do MPAS** — não o total do job. Em
 `sequential`, `N = NPES` (o `-n`); em `concurrent`, `N = atm_pet_count`. O MOM6
-não usa METIS (decompõe a própria grade lógica por *layout*).
+não usa METIS: ele decompõe a própria grade lógica por *layout*, tratado na
+subseção seguinte (`domain-mom6.bash`).
 
 O script `run/gen-metis.bash` gera as partições necessárias lendo malha e modo da
 `nuopc.input`:
@@ -99,6 +100,66 @@ ciente do layout — em `concurrent` ele exige/gera diretamente
 `-n ≠ atm_pet_count + ocn_pet_count`. Assim, o fluxo volta a ser um único
 `run_esmApp.jaci -n N`. O `gen-metis.bash` continua útil para gerar partições
 avulsas (estudos de escalabilidade) ou fora do `run_esmApp.jaci`.
+
+### Decomposição de domínio do MOM6+SIS2 (`domain-mom6.bash`)
+
+É o análogo do `gen-metis.bash` para o lado oceânico. O MOM6 fatia a grade
+global em `NIPROC x NJPROC` blocos (`LAYOUT`), um PE por bloco, e o produto
+`NIPROC * NJPROC` precisa casar com os PETs que o oceano recebe: o total do run
+(`-n`) em `sequential`, apenas `ocn_pet_count` em `concurrent`. Se não bater, o
+FMS aborta com:
+
+```
+fms2_io(parse_mask_table_2d): mpp_npes() .NE. layout(1)*layout(2) - nmask
+```
+
+O `domain-mom6.bash` escolhe o `LAYOUT` equilibrado a partir da topografia e,
+opcionalmente, atualiza `MOM_input` e `SIS_input`. É 100% shell (`ncdump` do
+módulo `cray-netcdf` mais `awk`), não usa Python e não depende do
+`COUPLER_ROOT` nem do ESMF, podendo ser executado de qualquer diretório.
+
+```bash
+module load cray-netcdf
+cd /…/exp1
+
+# Uso normal no acoplado: LAYOUT com produto exato = PETs do OCN.
+# Casa com o exemplo concorrente acima (ocn_pet_count = 40).
+bash domain-mom6.bash --topog INPUT/ocean_topog.nc --no-mask --pes 40 \
+     --mom-input MOM_input --sis-input SIS_input
+
+# Inspecionar sem tocar nos arquivos de configuração
+bash domain-mom6.bash --topog INPUT/ocean_topog.nc --no-mask --pes 40 --dry-run
+
+# LAYOUT explícito
+bash domain-mom6.bash --topog INPUT/ocean_topog.nc --layout 8,5
+```
+
+O script filtra a forma dos blocos: `--min-tile` (padrão 9 pontos, que é
+`2*NIHALO+1`, o halo do domínio `MOM_MOSAIC`) e `--max-aspect` (padrão 4,0).
+Blocos menores que o halo fazem o FMS ler além do domínio do vizinho.
+
+> **`mask_table` não funciona no acoplado.** O cap NUOPC do MOM6 monta o
+> `ESMF_Grid` com um `deBlockList` formado só pelos blocos que têm PET. Blocos
+> mascarados deixam buracos no espaço de índices; o `ESMF_DistGridCreate` aceita
+> em silêncio e a falha só aparece no conector `OCN-TO-MED`, em
+> `ESMF_GridToMesh`, com `Bad processor number!` seguido de SIGSEGV. Por isso a
+> opção `--no-mask` é o caminho padrão aqui, e o modo `--target-eff` (que busca
+> um `EFF` alvo descontando a máscara) fica reservado ao MOM6+SIS2 standalone.
+> Explicação completa, com as duas rotas de correção do cap, em
+> `docs/mascara-cap-nuopc.md`.
+
+Com `--no-mask` os blocos 100% terra continuam existindo e recebem PET, o que
+custa pouco por não haver oceano neles. Na grade 180 x 158 com 128 PETs, o
+resultado é `LAYOUT = 16, 8` com 7 blocos secos, e o script comenta com `!` uma
+diretiva `MASKTABLE` remanescente nos arquivos de entrada.
+
+O `LAYOUT` deve ser idêntico em `MOM_input` e `SIS_input` (o script atualiza
+ambos, com backup `.bak.<timestamp>`). Regenere-o sempre que mudar a topografia,
+a resolução ou o número de PETs do oceano. Para gerar um `mask_table` destinado
+ao MOM6+SIS2 standalone, veja antes a ressalva sobre a convenção de fronteiras
+em `docs/domain-mom6.md`, seção 5. Detalhes do algoritmo (soma de
+prefixos 2D, escore dos candidatos, formato do `mask_table`) em
+`docs/domain-mom6.md`; todas as opções em `bash domain-mom6.bash --help`.
 
 ### Smoke test do modo concorrente
 
@@ -206,6 +267,7 @@ Coupler-Install/             ← scripts de instalação (standalone)
 ├── 1-monan.bash             ← etapa 1 — MONAN-A 2.0
 ├── 2-mom.bash               ← etapa 2 — MOM6+SIS2+FMS
 ├── 3-coupler.bash           ← etapa 3 — linka bin/esmApp
+├── domain-mom6.bash         ← utilitário: LAYOUT + mask_table do MOM6+SIS2
 ├── sites/                   ← config por máquina
 │   ├── site-jaci.bash       ← Jaci (padrão)
 │   └── site-template.bash   ← esqueleto p/ nova máquina
@@ -213,6 +275,8 @@ Coupler-Install/             ← scripts de instalação (standalone)
 │   └── cray-gnu-monan.mk    ← template mkmf Cray/GNU
 ├── docs/                    ← documentação
 │   ├── CHANGELOG.md         ← histórico do instalador
+│   ├── domain-mom6.md       ← algoritmo da decomposição de domínio
+│   ├── mascara-cap-nuopc.md ← por que mask_table falha no acoplado
 │   └── notas-standalone.md  ← notas de design (separação)
 ├── README.md
 └── .gitignore
@@ -236,6 +300,7 @@ encontram esses arquivos automaticamente — veja "Resolução de caminhos".
 | Outro template mkmf                 | `export MKMF_TEMPLATE_SRC=/caminho/template.mk`   |
 | Outra raiz para o acoplador         | `--coupler-root DIR` ou `export COUPLER_ROOT=DIR` |
 | Outro fork/branch dos modelos       | ajuste o `.gitmodules` do `MONAN-Coupler`         |
+| Mudar o nº de PETs do oceano        | `bash domain-mom6.bash --no-mask --pes N` (regera o `LAYOUT`) |
 
 ## Resolução de caminhos
 
