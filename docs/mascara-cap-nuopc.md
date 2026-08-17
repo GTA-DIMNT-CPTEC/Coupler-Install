@@ -3,7 +3,8 @@
 Por que o `mask_table` funciona no MOM6 isolado e derruba o sistema acoplado.
 
 INPE / CGCT / DIMNT, Grupo de Trabalho para Acoplamento de Modelos.
-Documentado a partir do incidente de 22/07/2026 (256 PETs, modo concorrente).
+Documentado a partir do incidente de 22/07/2026 (256 PETs, `coupling_mode =
+'concurrent'` com `pet_layout = 'split'`).
 
 ---
 
@@ -68,6 +69,12 @@ As decomposições **são** independentes, inclusive no run que falhou. O MPAS
 particiona sua malha Voronoi com METIS sobre 128 PETs; o MOM6 fatia a grade
 lógica em `NIPROC x NJPROC` sobre outros 128 PETs. Nenhum dos dois conhece o
 número de blocos do outro, e isso não mudou.
+
+Uma nota de vocabulário, posterior a este incidente: o split de comunicador é
+hoje controlado por `pet_layout = 'split'`, independente do `coupling_mode`
+(v14.20). Tudo o que esta seção diz vale igualmente para `sequential + split`,
+porque o argumento é sobre a geometria publicada ao ESMF, não sobre a ordem em
+que os componentes avançam.
 
 Um experimento mental fecha o ponto: troque o MPAS pelo DATM, ou retire a
 atmosfera e deixe apenas MOM6 mais mediador. **A falha se repete igual.** Ela

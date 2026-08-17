@@ -17,16 +17,19 @@
 #   os PETs efetivos = NIPROC*NJPROC − (blocos mascarados). É esse número que
 #   o componente MOM6+SIS2 exige em PETs.
 #
-#   O acoplador pode rodar em mais de uma arquitetura de PETs:
-#     - modo compartilhado: os MESMOS PETs do run servem à atmosfera e ao
+#   O acoplador pode rodar em mais de uma arquitetura de PETs, escolhida por
+#   pet_layout em &nuopc_petlayout (nuopc.input). Repare que o que decide é o
+#   LAYOUT, não o coupling_mode: desde a v14.20 os dois eixos são independentes,
+#   e sequential+split também dá ao OCN apenas a sua fatia.
+#     - pet_layout='shared': os MESMOS PETs do run servem à atmosfera e ao
 #       oceano; nesse caso, EFF deve igualar o TOTAL de PETs (-n) do run.
-#     - modo concorrente (split de comunicador): o total de PETs é dividido
+#     - pet_layout='split' (split de comunicador): o total de PETs é dividido
 #       entre MONAN-A e MOM6+SIS2 (ex.: -n 256 = 128 PETs ATM + 128 PETs OCN);
-#       nesse caso, EFF deve igualar apenas a FATIA alocada ao OCN, não o
-#       total do run.
+#       nesse caso, EFF deve igualar apenas ocn_pet_count, a FATIA alocada ao
+#       OCN, não o total do run.
 #   Este script não sabe qual arquitetura está em uso — quem chama --target-eff
 #   deve informar o N correspondente aos PETs que o OCN vai efetivamente
-#   receber (o total do run, se compartilhado; a fatia do OCN, se concorrente).
+#   receber (o total do run, se shared; ocn_pet_count, se split).
 #   Um LAYOUT/mask_table cujo EFF não bate com os PETs recebidos pelo OCN
 #   produz o erro fatal do FMS:
 #     "fms2_io(parse_mask_table_2d): mpp_npes() .NE. layout(1)*layout(2) - nmask"
@@ -50,10 +53,9 @@
 #                       pois o nº de blocos mascarados depende da FORMA do
 #                       LAYOUT, não só do produto NIPROC*NJPROC. Use N = PETs
 #                       que o OCN vai efetivamente receber: o total do run
-#                       (-n), se o acoplador estiver em modo compartilhado; ou
-#                       apenas a fatia alocada ao OCN, se estiver em modo
-#                       concorrente com split de comunicador (ex.: metade do
-#                       total, ou outra proporção configurada).
+#                       (-n), se pet_layout='shared'; ou apenas ocn_pet_count,
+#                       se pet_layout='split' (ex.: metade do total, ou outra
+#                       proporção configurada).
 #   --search-range R    Nº de valores de --pes tentados a partir de N em
 #                       --target-eff (padrão: 40).
 #   --no-mask           Não gera mask_table: escolhe o melhor LAYOUT cujo
@@ -95,7 +97,7 @@
 # EXEMPLOS
 #   bash domain-mom6.bash --topog INPUT/ocean_topog.nc --pes 128
 #   bash domain-mom6.bash --topog INPUT/ocean_topog.nc --layout 16,8
-#   # run -n 256 em modo concorrente, split 128 ATM + 128 OCN (acoplado):
+#   # run -n 256 com pet_layout='split', 128 ATM + 128 OCN (acoplado):
 #   bash domain-mom6.bash --topog INPUT/ocean_topog.nc --no-mask --pes 128 \
 #        --mom-input MOM_input --sis-input SIS_input
 #   # MOM6+SIS2 standalone, com mask_table para 128 PEs efetivos:
@@ -166,8 +168,8 @@ Opções:
   --layout NI,NJ    LAYOUT explícito (prioritário sobre --pes; não combina com --target-eff).
   --target-eff N    Busca um LAYOUT cujo EFF (PETs efetivos) seja EXATAMENTE N
                     (varre --pes N..N+search-range). Use N = PETs que o OCN vai
-                    efetivamente receber (total do run se compartilhado; a
-                    fatia do OCN se houver split ATM/OCN): evita o erro
+                    efetivamente receber (total do run se pet_layout='shared';
+                    ocn_pet_count se pet_layout='split'): evita o erro
                     "mpp_npes() .NE. layout(1)*layout(2) - nmask". Exclusivo
                     (não combina com --pes/--layout).
   --search-range R  Tentativas de --target-eff a partir de N (padrão: 40).
@@ -198,7 +200,7 @@ Exemplos:
   bash domain-mom6.bash --topog INPUT/ocean_topog.nc --no-mask --pes 128
   bash domain-mom6.bash --topog INPUT/ocean_topog.nc --pes 128
   bash domain-mom6.bash --topog INPUT/ocean_topog.nc --layout 16,8
-  # run -n 256 em modo concorrente, split 128 ATM + 128 OCN (acoplado):
+  # run -n 256 com pet_layout='split', 128 ATM + 128 OCN (acoplado):
   bash domain-mom6.bash --topog INPUT/ocean_topog.nc --no-mask --pes 128 \
        --mom-input MOM_input --sis-input SIS_input
   # MOM6+SIS2 standalone, com mask_table para 128 PEs efetivos:
@@ -783,7 +785,7 @@ else
   log_info "Nenhum mask_table: remova (ou comente com '!') a diretiva MASKTABLE dos arquivos de entrada."
 fi
 if [[ -n "${EFF}" ]]; then
-  log_info "O componente MOM6+SIS2 deve receber exatamente ${EFF} PETs (o total do run -n, se o acoplador estiver em modo compartilhado; ou a fatia alocada ao OCN, se estiver em modo concorrente com split de comunicador)."
+  log_info "O componente MOM6+SIS2 deve receber exatamente ${EFF} PETs (o total do run -n, se pet_layout='shared'; ou ocn_pet_count, se pet_layout='split' — em qualquer coupling_mode)."
 fi
 log_sep
 

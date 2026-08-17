@@ -36,10 +36,15 @@ fms2_io(parse_mask_table_2d): mpp_npes() .NE. layout(1)*layout(2) - nmask
 
 **Atenção ao modo de execução do acoplador:**
 
-| Modo | Valor que EFF deve igualar |
+| `pet_layout` (`&nuopc_petlayout`) | Valor que EFF deve igualar |
 |---|---|
-| Compartilhado (sequencial) | total de PETs do run (`-n`) |
-| Concorrente (split de comunicador) | apenas a fatia alocada ao OCN |
+| `shared` (sem split de comunicador) | total de PETs do run (`-n`) |
+| `split` (blocos disjuntos ATM \| OCN) | apenas `ocn_pet_count`, a fatia do OCN |
+
+Repare que quem manda aqui é o **layout**, não o `coupling_mode`. Desde a
+v14.20 os dois eixos são independentes, e `sequential + split` também entrega ao
+OCN apenas a sua fatia — antes disso, `sequential` implicava `shared`, e a tabela
+podia ser lida como se falasse de modos de execução.
 
 O script não sabe qual arquitetura está em uso: quem chama `--target-eff` informa
 o N correspondente aos PETs que o OCN vai efetivamente receber.
@@ -405,7 +410,7 @@ bash domain-mom6.bash --topog INPUT/ocean_topog.nc --pes 128
 # LAYOUT explícito
 bash domain-mom6.bash --topog INPUT/ocean_topog.nc --layout 16,8
 
-# Run com -n 256 em modo concorrente (128 ATM + 128 OCN):
+# Run com -n 256 e pet_layout='split' (128 ATM + 128 OCN):
 # gera o LAYOUT com EFF exatamente 128 e já atualiza os inputs
 bash domain-mom6.bash --topog INPUT/ocean_topog.nc --target-eff 128 \
      --input-dir INPUT --mom-input MOM_input --sis-input SIS_input
@@ -423,8 +428,10 @@ bash domain-mom6.bash --topog INPUT/ocean_topog.nc --target-eff 64 --dry-run
    o sintoma enganoso.
 2. `LAYOUT` em `MOM_input` e `SIS_input` deve ser **idêntico** nos dois arquivos,
    assim como o `MASKTABLE`.
-3. `EFF` deve casar com os PETs que o OCN recebe, e não com o total do job em
-   modo concorrente. Esse é o erro mais comum na configuração do acoplador.
+3. `EFF` deve casar com os PETs que o OCN recebe, e não com o total do job
+   quando `pet_layout = 'split'`. Esse é o erro mais comum na configuração do
+   acoplador. O critério é o layout: `sequential + split` também dá ao OCN
+   apenas `ocn_pet_count`.
 4. O `mask_table` precisa estar no diretório de onde o FMS lê os inputs
    (`INPUT/`), e o nome referenciado em `MASKTABLE` é apenas o basename.
 5. Mudou a topografia, a resolução ou o número de PETs do OCN? Regenere o
