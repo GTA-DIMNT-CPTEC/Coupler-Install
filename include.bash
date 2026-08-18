@@ -399,3 +399,74 @@ load_modules() {
   log_info "Módulos carregados:"
   module list 2>&1 | grep -E '^\s+[0-9]+\)' | sed 's/^/    /'
 }
+
+# =============================================================================
+# Proveniência da árvore de um modelo acoplado (v3 — Ago 2026)
+# =============================================================================
+# Antes, cada script de instalação fixava a revisão do seu modelo num SHA
+# literal. O SHA já estava registrado no gitlink do submódulo, então havia duas
+# fontes de verdade para o mesmo dado: quem atualizava o submódulo e commitava
+# deixava a constante para trás, sem que nada avisasse. Estas duas funções
+# eliminam o literal e passam a RELATAR divergências.
+
+# resolve_model_ref <raiz> <caminho-do-submodulo>
+#   Ecoa o commit registrado no gitlink do superprojeto — o ponto validado.
+#   Ecoa vazio (sem erro) quando não há superprojeto ou submódulo: clone
+#   avulso é situação legítima, apenas sem referência para comparar.
+resolve_model_ref() {
+  local root="$1" sub="$2"
+  git -C "${root}" ls-tree HEAD "${sub}" 2>/dev/null \
+    | awk '$2=="commit"{print $3}'
+}
+
+# report_model_provenance <dir> <branch-alvo> <ref-validado> <rótulo>
+#   Registra no log qual revisão está sendo compilada e como ela se relaciona
+#   com o ponto validado. Nunca falha: atualizar o modelo é o fluxo esperado,
+#   e um script de build não deve barrar isso — deve deixar rastro.
+report_model_provenance() {
+  local dir="$1" branch="$2" ref="$3" rotulo="$4"
+  local head desc atual ahead
+
+  if ! command -v git >/dev/null 2>&1 || \
+     ! git -C "${dir}" rev-parse --git-dir >/dev/null 2>&1; then
+    log_warn "${rotulo}: sem metadados git — proveniência não registrada."
+    return 0
+  fi
+
+  head="$(git -C "${dir}" rev-parse HEAD 2>/dev/null || echo desconhecido)"
+  desc="$(git -C "${dir}" describe --tags --always --dirty 2>/dev/null || echo '-')"
+  atual="$(git -C "${dir}" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')"
+  log_info "${rotulo} HEAD   : ${head}"
+  log_info "${rotulo} versão : ${desc}"
+  log_info "${rotulo} branch : ${atual}  (alvo: ${branch})"
+
+  # Três situações com significados distintos. Tratá-las como um único
+  # "difere do REF" produzia aviso indistinguível entre rotina e problema.
+  if [[ -z "${ref}" ]]; then
+    log_warn "${rotulo}: sem ponto validado registrado (superprojeto sem gitlink)."
+    log_warn "  Compilando como está; proveniência não verificável."
+  elif [[ "${head}" == "${ref}"* || "${ref}" == "${head}"* ]]; then
+    log_ok "${rotulo}: HEAD no ponto validado com o acoplador."
+  elif git -C "${dir}" merge-base --is-ancestor "${ref}" HEAD 2>/dev/null; then
+    ahead="$(git -C "${dir}" rev-list --count "${ref}..HEAD" 2>/dev/null || echo '?')"
+    log_info "${rotulo}: ${ahead} commit(s) à frente do último ponto validado."
+    log_info "  Compilando a ponta. Validada a rodada, commite o gitlink no"
+    log_info "  superprojeto — é isso que fixa o novo ponto de referência."
+  else
+    log_warn "${rotulo}: HEAD NÃO descende do ponto validado ${ref}."
+    log_warn "  Outra linha, rebase ou reset. Compilando como está."
+    log_warn "  Para voltar ao alvo:  git -C ${dir} checkout ${branch}"
+  fi
+
+  if [[ "${atual}" == "HEAD" ]]; then
+    log_info "${rotulo}: HEAD desanexado (estado esperado de árvore fixada no gitlink)."
+    log_info "  Para acompanhar a branch:  git -C ${dir} checkout ${branch}"
+  elif [[ "${atual}" != "${branch}" ]]; then
+    log_warn "${rotulo}: branch ativa (${atual}) difere do alvo (${branch})."
+  fi
+
+  if [[ -n "$(git -C "${dir}" status --porcelain 2>/dev/null)" ]]; then
+    log_warn "${rotulo}: modificações locais não commitadas."
+    log_warn "  O binário não corresponderá a nenhuma revisão publicada."
+  fi
+}

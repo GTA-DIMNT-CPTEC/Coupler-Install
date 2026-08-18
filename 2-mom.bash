@@ -14,8 +14,9 @@
 #
 # DOWNLOAD AUTOMÁTICO: se a árvore MOM6-examples não existir (ou estiver vazia),
 # o script a baixa de https://github.com/GTA-DIMNT-CPTEC/MOM6-examples (com
-# submódulos) e faz checkout do commit fixado (cec94e47). Sobrescreva a origem e
-# a revisão com as variáveis de ambiente MOM6_EXAMPLES_URL e MOM6_EXAMPLES_REF.
+# submódulos) e faz checkout do ponto validado (gitlink). Sobrescreva a origem e
+# a origem com MOM6_EXAMPLES_URL. O acoplador acompanha a branch
+# feature/mom6_coupler; o ponto validado vem do gitlink do submódulo.
 #
 # ARTEFATOS GERADOS (sob MOM6-examples/build/gnu/):
 #   shared/repro/libfms.a              infraestrutura FMS
@@ -90,11 +91,40 @@ MOM6_EXAMPLES_DIR="${COUPLER_ROOT}/models/ocean/MOM6-examples"
 # confirma a presença e, se faltar, inicializa o submódulo recursivamente; sem
 # submódulo, faz clone direto --recursive (legado). Sobrescrevíveis por ambiente:
 #   export MOM6_EXAMPLES_URL=https://github.com/MEU_USUARIO/MOM6-examples.git
-#   export MOM6_EXAMPLES_REF=<commit|tag|branch>
+#   export MOM6_EXAMPLES_REF=<commit>    # só em clone avulso, sem superprojeto
 MOM6_EXAMPLES_URL="${MOM6_EXAMPLES_URL:-https://github.com/GTA-DIMNT-CPTEC/MOM6-examples.git}"
-MOM6_EXAMPLES_REF="${MOM6_EXAMPLES_REF:-cec94e473bfee1bc3ee9b3c64e147361123fd7fb}"
-ensure_model_tree "${MOM6_EXAMPLES_DIR}" "${COUPLER_ROOT}" "models/ocean/MOM6-examples" \
-                  "${MOM6_EXAMPLES_URL}" "${MOM6_EXAMPLES_REF}"
+
+# BRANCH x PONTO VALIDADO — v3 (Ago 2026). O acoplador acompanha a branch
+# feature/mom6_coupler; o commit dessa branch já validado com o acoplador vem
+# do gitlink do submódulo, não de constante neste script. Manter um SHA
+# literal criava duas fontes de verdade para o mesmo dado, e a constante
+# ficava para trás a cada atualização do submódulo, em silêncio.
+MOM6_EXAMPLES_BRANCH="${MOM6_EXAMPLES_BRANCH:-feature/mom6_coupler}"
+MOM6_EXAMPLES_SUB="models/ocean/MOM6-examples"
+if [[ -z "${MOM6_EXAMPLES_REF:-}" ]]; then
+  MOM6_EXAMPLES_REF="$(resolve_model_ref "${COUPLER_ROOT}" "${MOM6_EXAMPLES_SUB}")"
+fi
+
+# Clone novo: no ponto validado, quando houver. Compilar automaticamente
+# código nunca testado com o acoplador transformaria qualquer commit alheio
+# num problema desta árvore. Para seguir a ponta deliberadamente:
+#   export MOM6_EXAMPLES_FOLLOW=true
+MOM6_EXAMPLES_FOLLOW="${MOM6_EXAMPLES_FOLLOW:-false}"
+if [[ "${MOM6_EXAMPLES_FOLLOW}" == true || -z "${MOM6_EXAMPLES_REF}" ]]; then
+  _mom6_clone_ref="${MOM6_EXAMPLES_BRANCH}"
+else
+  _mom6_clone_ref="${MOM6_EXAMPLES_REF}"
+fi
+ensure_model_tree "${MOM6_EXAMPLES_DIR}" "${COUPLER_ROOT}" "${MOM6_EXAMPLES_SUB}" \
+                  "${MOM6_EXAMPLES_URL}" "${_mom6_clone_ref}"
+
+report_model_provenance "${MOM6_EXAMPLES_DIR}" "${MOM6_EXAMPLES_BRANCH}" \
+                        "${MOM6_EXAMPLES_REF}" "MOM6-examples"
+
+# Logs de make FORA da árvore do modelo: gravá-los dentro do submódulo o deixa
+# sujo e pode bloquear o `git checkout` da atualização seguinte.
+MOM6_LOGDIR="${COUPLER_ROOT}/logs"
+mkdir -p "${MOM6_LOGDIR}"
 
 # =============================================================================
 # SEÇÃO DE CONFIGURAÇÃO — revise ao migrar de usuário ou máquina
@@ -220,7 +250,7 @@ if [[ "${ONLY_NUOPC}" == false ]]; then
       path_names
 
   # NETCDF=4: o fms2_io exige a API NetCDF-4/HDF5 (fornecida por cray-netcdf).
-  make NETCDF=4 REPRO=1 libfms.a -j "${MAKE_JOBS}" 2>&1 | tee make_fms.log
+  make NETCDF=4 REPRO=1 libfms.a -j "${MAKE_JOBS}" 2>&1 | tee "${MOM6_LOGDIR}/make_fms.log"
 
   timer_step "[1/3] FMS compilado"
 else
@@ -258,7 +288,7 @@ if [[ "${ONLY_NUOPC}" == false ]]; then
         -c "-Duse_libMPI -Duse_netCDF -DSPMD -Duse_AM3_physics -D_USE_LEGACY_LAND_" \
         path_names
 
-    make REPRO=1 MOM6 -j "${MAKE_JOBS}" 2>&1 | tee make_mom6_ice_ocean_SIS2.log
+    make REPRO=1 MOM6 -j "${MAKE_JOBS}" 2>&1 | tee "${MOM6_LOGDIR}/make_mom6_ice_ocean_SIS2.log"
   else
     _mom6_target="ocean_only"
     log_step 2 3 "MOM6 standalone (ocean_only — sem gelo)"
@@ -281,7 +311,7 @@ if [[ "${ONLY_NUOPC}" == false ]]; then
         -c "-Duse_libMPI -Duse_netCDF -DSPMD" \
         path_names
 
-    make REPRO=1 MOM6 -j "${MAKE_JOBS}" 2>&1 | tee make_mom6_ocean_only.log
+    make REPRO=1 MOM6 -j "${MAKE_JOBS}" 2>&1 | tee "${MOM6_LOGDIR}/make_mom6_ocean_only.log"
   fi
 
   timer_step "[2/3] MOM6 standalone compilado (${_mom6_target})"
@@ -330,7 +360,7 @@ ${MKMF} \
     -c "-Duse_libMPI -Duse_netCDF -DSPMD -DUSE_ESMF_NUOPC -fcheck=all" \
     path_names
 
-make REPRO=1 libmom6_nuopc.a -j "${MAKE_JOBS}" 2>&1 | tee make_mom6_nuopc.log
+make REPRO=1 libmom6_nuopc.a -j "${MAKE_JOBS}" 2>&1 | tee "${MOM6_LOGDIR}/make_mom6_nuopc.log"
 
 timer_step "[3/3] Cap NUOPC compilado"
 
