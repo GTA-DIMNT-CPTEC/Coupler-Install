@@ -151,9 +151,9 @@ MONAN_MODEL_BRANCH="${MONAN_MODEL_BRANCH:-feature/monan_coupler}"
 # Vazio é estado legítimo (clone avulso, sem superprojeto): significa apenas
 # que não há ponto validado registrado, e a checagem adiante reporta isso em
 # vez de comparar contra nada.
+MONAN_MODEL_SUB="models/atmos/MONAN-Model"
 if [[ -z "${MONAN_MODEL_REF:-}" ]]; then
-  MONAN_MODEL_REF="$(git -C "${COUPLER_ROOT}" ls-tree HEAD models/atmos/MONAN-Model \
-                      2>/dev/null | awk '$2=="commit"{print $3}')"
+  MONAN_MODEL_REF="$(resolve_model_ref "${COUPLER_ROOT}" "${MONAN_MODEL_SUB}")"
 fi
 
 # Clone novo: no ponto validado, quando houver. Compilar automaticamente
@@ -169,7 +169,7 @@ if [[ "${MONAN_MODEL_FOLLOW}" == true || -z "${MONAN_MODEL_REF}" ]]; then
 else
   _monan_clone_ref="${MONAN_MODEL_REF}"
 fi
-ensure_model_tree "${MONAN_MODEL}" "${COUPLER_ROOT}" "models/atmos/MONAN-Model" \
+ensure_model_tree "${MONAN_MODEL}" "${COUPLER_ROOT}" "${MONAN_MODEL_SUB}" \
                   "${MONAN_MODEL_URL}" "${_monan_clone_ref}"
 
 # ── Módulos Jaci (Cray XD 2000 com PrgEnv-gnu) ────────────────────────────────
@@ -213,55 +213,10 @@ log_ok "ESMF externo  ESMF_LIBDIR=${ESMF_LIBDIR}"
 cd "${MONAN_MODEL}"
 
 # ── Proveniência da árvore de fontes ─────────────────────────────────────────
-# Sem isto, um binário compilado hoje é irrastreável amanhã: o MONAN-Model pode
-# ter avançado por `git pull` sem que nada aqui registre qual revisão foi de
-# fato compilada. Divergir de MONAN_MODEL_REF é AVISO, não erro — atualizar o
-# modelo é justamente o fluxo esperado.
-if command -v git >/dev/null 2>&1 && git -C . rev-parse --git-dir >/dev/null 2>&1; then
-  MONAN_HEAD="$(git -C . rev-parse HEAD 2>/dev/null || echo desconhecido)"
-  MONAN_DESC="$(git -C . describe --tags --always --dirty 2>/dev/null || echo '-')"
-  log_info "MONAN-Model HEAD  : ${MONAN_HEAD}"
-  log_info "MONAN-Model versão: ${MONAN_DESC}"
-  MONAN_BRANCH_ATUAL="$(git -C . rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')"
-  log_info "MONAN-Model branch: ${MONAN_BRANCH_ATUAL}  (alvo: ${MONAN_MODEL_BRANCH})"
-
-  # Três situações, com significados bem diferentes — tratá-las como um único
-  # "difere do REF" produzia aviso indistinguível entre rotina e problema.
-  if [[ -z "${MONAN_MODEL_REF}" ]]; then
-    log_warn "Sem ponto validado registrado (superprojeto sem gitlink deste submódulo)."
-    log_warn "  Compilando a árvore como está; proveniência não verificável."
-  elif [[ "${MONAN_HEAD}" == "${MONAN_MODEL_REF}"* || \
-        "${MONAN_MODEL_REF}" == "${MONAN_HEAD}"* ]]; then
-    log_ok "HEAD no ponto validado com o acoplador."
-  elif git -C . merge-base --is-ancestor "${MONAN_MODEL_REF}" HEAD 2>/dev/null; then
-    # Caso ROTINEIRO: a branch avançou. Não é erro — é o fluxo pretendido.
-    _ahead="$(git -C . rev-list --count "${MONAN_MODEL_REF}..HEAD" 2>/dev/null || echo '?')"
-    log_info "Árvore ${_ahead} commit(s) à frente do último ponto validado."
-    log_info "  Compilando a ponta. Se a rodada de validação passar, fixe o novo"
-    log_info "  ponto neste script:  MONAN_MODEL_REF=${MONAN_HEAD}"
-  else
-    # Caso ATÍPICO: HEAD não descende do REF — outra branch, rebase ou reset.
-    log_warn "HEAD NÃO descende do ponto validado ${MONAN_MODEL_REF}."
-    log_warn "  Outra linha de desenvolvimento, rebase ou reset. Compilando como está."
-    log_warn "  Para voltar ao alvo:  git -C ${MONAN_MODEL} checkout ${MONAN_MODEL_BRANCH}"
-  fi
-
-  if [[ "${MONAN_BRANCH_ATUAL}" == "HEAD" ]]; then
-    # Desanexado é o estado normal de um clone/submódulo fixado no REF, e não
-    # é problema: é justamente o que garante reprodutibilidade. Mas `git pull`
-    # não opera aqui, então quem for atualizar precisa saber disso antes.
-    log_info "HEAD desanexado (estado esperado de árvore fixada no REF)."
-    log_info "  Para acompanhar a branch:  git -C ${MONAN_MODEL} checkout ${MONAN_MODEL_BRANCH}"
-  elif [[ "${MONAN_BRANCH_ATUAL}" != "${MONAN_MODEL_BRANCH}" ]]; then
-    log_warn "Branch ativa (${MONAN_BRANCH_ATUAL}) difere do alvo (${MONAN_MODEL_BRANCH})."
-  fi
-  if [[ -n "$(git -C . status --porcelain 2>/dev/null)" ]]; then
-    log_warn "Árvore do MONAN-Model com modificações locais não commitadas."
-    log_warn "  O binário resultante não corresponde a nenhuma revisão publicada."
-  fi
-else
-  log_warn "MONAN-Model sem metadados git — proveniência não registrada."
-fi
+# Lógica compartilhada com 2-mom.bash (include.bash): registra a revisão
+# compilada e a compara com o ponto validado, sem jamais barrar a compilação.
+report_model_provenance "${MONAN_MODEL}" "${MONAN_MODEL_BRANCH}" \
+                        "${MONAN_MODEL_REF}" "MONAN-Model"
 
 # ── Logs de make FORA da árvore do modelo ────────────────────────────────────
 # Gravar make-*.log dentro de MONAN-Model deixa o submódulo sujo e pode
