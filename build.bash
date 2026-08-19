@@ -64,13 +64,6 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if ! [[ "${FROM_STEP}" =~ ^[1-3]$ ]]; then
-  log_error "--from: valor inválido '${FROM_STEP}' (use 1, 2 ou 3)"; exit 1
-fi
-if [[ "${ONLY_STEP}" != 0 ]] && ! [[ "${ONLY_STEP}" =~ ^[1-3]$ ]]; then
-  log_error "--only: valor inválido '${ONLY_STEP}' (use 1, 2 ou 3)"; exit 1
-fi
-
 # ── Etapas ────────────────────────────────────────────────────────────────────
 declare -a STEP_SCRIPTS=( "" "1-monan.bash" "2-mom.bash" "3-coupler.bash" )
 declare -a STEP_LABELS=( "" "MONAN-A 2.0 (MPAS-A 8.3.1)" "MOM6+SIS2 + FMS + cap NUOPC" "Acoplador (bin/esmApp)" )

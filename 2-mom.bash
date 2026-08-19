@@ -30,6 +30,15 @@
 # de símbolos duplicados com a libmom6_nuopc.a.
 #
 # NOTA CRAY: o compilador é sempre o wrapper 'ftn' (nunca gfortran direto).
+#
+# CONTRATO DESTA ETAPA (2 de 3)
+#   REQUER   COUPLER_ROOT resolvido; config de sítio (MODULES_MOM6, MAKE_JOBS);
+#            ESMFMKFILE válido; template mkmf; árvore models/ocean/MOM6-examples.
+#   PRODUZ   lib/mom6/ e mod/mom6/   (libmom6_nuopc.a e módulos do cap)
+#            lib/fms/  e mod/fms/    (libfms.a)
+#            logs/make_fms.log, make_mom6_*.log, make_mom6_nuopc.log
+#   CONSOME  nada da etapa 1 — MONAN-A e MOM6 compilam de forma independente.
+#   ALIMENTA a etapa 3 via MOM6_LIBDIR/MOM6_MODDIR e FMS_LIBDIR/FMS_MODDIR.
 # =============================================================================
 set -euo pipefail
 

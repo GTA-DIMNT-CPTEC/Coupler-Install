@@ -64,6 +64,16 @@
 #   5. Nada é escrito dentro da árvore do MONAN-Model. Os logs de make vão para
 #      <raiz>/logs/. Gravá-los no diretório do modelo deixava o submódulo sujo
 #      e podia bloquear `git checkout`/`git pull` na atualização seguinte.
+#
+# CONTRATO DESTA ETAPA (1 de 3)
+#   REQUER   COUPLER_ROOT resolvido; config de sítio (MODULES_MONAN, MAKE_JOBS,
+#            MONAN2_LIBS); ESMF_MOD e ESMF_LIBDIR; árvore models/atmos/MONAN-Model.
+#   PRODUZ   mod/monan2/  (.mod do core 'atmosphere')
+#            lib/monan2/  (as 6 libs de MONAN2_LIBS)
+#            mod/monan2-init/ e lib/monan2-init/  (core 'init_atmosphere', opcional)
+#            logs/make-atmosphere.log e logs/make-init_atmosphere.log
+#   CONSOME  nada de etapas anteriores — é a primeira.
+#   ALIMENTA a etapa 3 (link do bin/esmApp) via MONAN2_MODDIR/MONAN2_LIBDIR.
 # =============================================================================
 set -euo pipefail
 
@@ -228,7 +238,7 @@ mkdir -p "${MONAN_LOGDIR}"
 # depender de word-splitting de uma string).
 MAKE_ARGS=(OPENMP=true USE_PIO2=false PRECISION=double AUTOCLEAN=true)
 
-# ── ETAPA 1 — Core 'atmosphere' (compilação e cópia dos artefatos) ────────────
+# ── PASSO 1/2 — Core 'atmosphere' (compilação e cópia dos artefatos) ─────────
 # A cópia DEVE ocorrer ANTES da compilação do 'init_atmosphere': com
 # AUTOCLEAN=true, a troca de CORE= apaga os artefatos do core anterior.
 log_step 1 2 "Core 'atmosphere' — compilação"
@@ -341,7 +351,7 @@ collect_artifacts a   "${LIB_ATM}" "Core 'atmosphere' (.a)"
 
 log_ok "Artefatos do 'atmosphere' copiados."
 
-# ── ETAPA 2 — Core 'init_atmosphere' (gerador de condições iniciais) ──────────
+# ── PASSO 2/2 — Core 'init_atmosphere' (gerador de condições iniciais) ───────
 # Pule com --skip-init-atm se não precisar gerar condições iniciais neste host.
 if [[ "${SKIP_INIT_ATM}" == false ]]; then
   log_step 2 2 "Core 'init_atmosphere' — compilação"

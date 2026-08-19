@@ -14,6 +14,14 @@
 #
 # ATENÇÃO: usa 'make clean' (apaga build/ e bin/), nunca 'make distclean'
 # (que removeria lib/ e mod/ instalados pelas etapas 1 e 2).
+#
+# CONTRATO DESTA ETAPA (3 de 3)
+#   REQUER   artefatos das etapas 1 e 2 (mod/lib de monan2, mom6 e fms);
+#            run/setenv-gnu.bash, que carrega módulos e define ESMFMKFILE e
+#            MPAS_DIR; config de sítio localizada (SITE_ENV).
+#   PRODUZ   bin/esmApp  (executável do sistema acoplado)
+#   CONSOME  etapas 1 e 2 — é a única que depende das duas.
+#   ALIMENTA a execução: run/run_esmApp.jaci resolve bin/esmApp por COUPLER_ROOT.
 # =============================================================================
 set -euo pipefail
 

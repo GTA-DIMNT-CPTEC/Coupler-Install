@@ -1,4 +1,40 @@
 #!/bin/bash
+
+# =============================================================================
+# ÍNDICE — funções agrupadas por domínio
+# =============================================================================
+# Um arquivo de 400+ linhas com 20 funções não revela sua própria organização.
+# Este índice existe para que quem for manter saiba onde procurar sem varrer o
+# arquivo inteiro. Ao acrescentar uma função, acrescente-a aqui também.
+#
+#   MENSAGENS     log_info · log_ok · log_warn · log_error · log_step · log_sep
+#                 Formato uniforme das saídas. AVISO e ERRO vão para stderr.
+#
+#   TEMPO         timer_start · timer_step · timer_total
+#                 Cronometragem das etapas, para o resumo final.
+#
+#   ARQUIVOS      cp_glob
+#                 Cópia por glob que avisa (em vez de falhar) quando não casa.
+#
+#   GIT           clone_if_missing · clone_recursive_if_missing ·
+#                 ensure_model_tree · resolve_model_ref ·
+#                 report_model_provenance
+#                 Obtenção das árvores de modelo e rastreio de qual revisão
+#                 está sendo compilada. ensure_model_tree é o ponto de entrada;
+#                 clone_if_missing é chamada só por ela.
+#
+#   CAMINHOS      resolve_coupler_root · find_first_path
+#                 Resolução da raiz do acoplador e busca do 1.º candidato
+#                 existente. find_first_path é usada só por
+#                 resolve_mkmf_template.
+#
+#   SÍTIO         resolve_site_env · load_site_env · resolve_mkmf_template ·
+#                 load_modules · check_var
+#                 Configuração dependente de máquina. resolve_* apenas
+#                 localiza; load_* localiza E carrega — a etapa 3 usa a
+#                 primeira forma de propósito, pois carrega o ambiente pelo
+#                 run/setenv-gnu.bash do acoplador, não pelo sítio direto.
+# =============================================================================
 # =============================================================================
 # include.bash — Biblioteca de funções compartilhadas
 # MONAN-A 2.0 × MOM6+SIS2 / NUOPC-ESMF 8.9.1
