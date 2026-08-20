@@ -58,16 +58,15 @@ Coupler-Install/             ← scripts de instalação (standalone)
 │   └── site-template.bash   ← esqueleto p/ nova máquina
 ├── templates/               ← templates de build
 │   └── cray-gnu-monan.mk    ← template mkmf Cray/GNU
-├── docs/                    ← documentação (ver seção "Documentação")
-│   ├── CHANGELOG.md         ← histórico de versões
-│   ├── notas-standalone.md  ← notas de design (separação instalador/acoplado)
-│   ├── domain-mom6.md       ← decomposição de domínio do MOM6+SIS2
-│   ├── mascara-cap-nuopc.md ← mask_table e o cap NUOPC do MOM6
-│   ├── MULTINO-run_esmApp.md ← execução multinó na Jaci
-│   └── SMT-Jaci.md          ← medição do efeito do SMT
 ├── README.md
 └── .gitignore
 ```
+
+> **A documentação saiu deste repositório.** O antigo `docs/`, incluindo o
+> `CHANGELOG.md`, passou para `MONAN-Coupler/docs/`. Os utilitários
+> `domain-mom6.bash` e `gen-metis.bash` também saíram, para
+> `MONAN-Coupler/tools/ocean/` e `MONAN-Coupler/tools/atmos/`.
+> Neste repositório ficaram apenas os scripts de instalação.
 
 `install.bash` = baixar + instalar (a partir do nada, um comando).
 `build.bash` = só as 3 etapas de compilação, assumindo o sistema já baixado
@@ -79,16 +78,15 @@ encontram esses arquivos automaticamente; veja "Resolução de caminhos".
 
 ## Documentação
 
-O diretório `docs/` reúne dois grupos de documentos. Os primeiros tratam do
-**instalador** propriamente dito; os demais tratam da **operação do sistema
-acoplado** já instalado, e ficam aqui por conveniência, para manter um único
-ponto de consulta.
+A documentação vive na árvore do `MONAN-Coupler`, em `docs/`. Ela foi movida
+para lá porque descreve o **sistema acoplado**, e não o instalador: mantê-la
+junto dos fontes que ela documenta evita que as duas versões divirjam.
 
-| Documento | Assunto |
+| Documento (`<COUPLER_ROOT>/docs/`) | Assunto |
 |:----------|:--------|
 | `CHANGELOG.md` | Histórico de versões, no formato *Keep a Changelog* simplificado. Registra também o raciocínio por trás de decisões contraintuitivas, para que não sejam revertidas por engano. |
 | `notas-standalone.md` | Notas de design da separação entre o instalador e o sistema acoplado: resolução de caminhos, preflight e o contrato entre os dois repositórios. |
-| `domain-mom6.md` | Algoritmo do `domain-mom6.bash`: soma de prefixos 2D, escore dos candidatos a `LAYOUT`, formato do `mask_table`, filtros de forma (`--min-tile`, `--max-aspect`) e armadilhas. |
+| `domain-mom6.md` | Algoritmo do `tools/ocean/domain-mom6.bash`: soma de prefixos 2D, escore dos candidatos a `LAYOUT`, formato do `mask_table`, filtros de forma (`--min-tile`, `--max-aspect`) e armadilhas. |
 | `mascara-cap-nuopc.md` | Por que um `mask_table` com `nmask > 0` é incompatível com o cap NUOPC atual do MOM6: representação densa contra esparsa no ESMF, o buraco no `DistGrid` e as duas rotas de correção. |
 | `MULTINO-run_esmApp.md` | Execução em vários nós na Jaci: hardware do sítio, contabilidade de `ncpus`, topologia nas combinações de `coupling_mode` × `pet_layout`, tabela de filas e limites, planejador `plan-layout.py` e boas práticas. |
 | `SMT-Jaci.md` | Caracterização do SMT nos nós de cálculo e medição do seu efeito sobre o acoplado: metodologia, resultados por componente, limitações de escopo e procedimento de reprodução. |
@@ -96,17 +94,12 @@ ponto de consulta.
 ### Por onde começar
 
 - **Instalando pela primeira vez:** este README basta. Consulte
-  `notas-standalone.md` apenas se algo na resolução de caminhos surpreender.
-- **Preparando a decomposição do oceano:** `domain-mom6.md` e, se aparecer
-  SIGSEGV no conector `OCN-TO-MED`, `mascara-cap-nuopc.md`.
-- **Submetendo o acoplado na Jaci:** `MULTINO-run_esmApp.md`.
-- **Dimensionando PETs por nó:** `SMT-Jaci.md` explica por que o padrão é 256 e
-  não 512, com a medição que sustenta a escolha.
-
-> Os scripts descritos em `MULTINO-run_esmApp.md` e em `SMT-Jaci.md`
-> (`run_esmApp.jaci`, `plan-layout.py`, `mede_smt.py`) pertencem à árvore do
-> `MONAN-Coupler`, e não a este repositório. A documentação está aqui por ser o
-> ponto de entrada do usuário; os fontes ficam onde são executados.
+  `docs/notas-standalone.md` apenas se algo na resolução de caminhos surpreender.
+- **Preparando a decomposição do oceano:** `docs/domain-mom6.md` e, se aparecer
+  SIGSEGV no conector `OCN-TO-MED`, `docs/mascara-cap-nuopc.md`.
+- **Submetendo o acoplado na Jaci:** `docs/MULTINO-run_esmApp.md`.
+- **Dimensionando PETs por nó:** `docs/SMT-Jaci.md` explica por que o padrão é
+  256 e não 512, com a medição que sustenta a escolha.
 
 ## Onde mexer
 
@@ -118,9 +111,10 @@ ponto de consulta.
 | Outro template mkmf                 | `export MKMF_TEMPLATE_SRC=/caminho/template.mk`   |
 | Outra raiz para o acoplador         | `--coupler-root DIR` ou `export COUPLER_ROOT=DIR` |
 | Outro fork/branch dos modelos       | ajuste o `.gitmodules` do `MONAN-Coupler`         |
-| Escolher o `LAYOUT` do MOM6+SIS2    | `domain-mom6.bash`; ver `docs/domain-mom6.md`      |
-| Submeter em vários nós              | `run_esmApp.jaci`; ver `docs/MULTINO-run_esmApp.md` |
+| Escolher o `LAYOUT` do MOM6+SIS2    | `<COUPLER_ROOT>/tools/ocean/domain-mom6.bash`; ver `docs/domain-mom6.md` |
+| Submeter em vários nós              | `<COUPLER_ROOT>/run/run_esmApp.jaci`; ver `docs/MULTINO-run_esmApp.md` |
 | Definir PETs por nó                 | padrão 256 (cores físicos); ver `docs/SMT-Jaci.md` |
+| Gerar partições METIS do MPAS       | `<COUPLER_ROOT>/tools/atmos/gen-metis.bash`        |
 
 ## Resolução de caminhos
 
@@ -160,11 +154,10 @@ cd <COUPLER_ROOT>
 source run/setenv-gnu.bash
 
 # 1. Decomposição do oceano (produto exato = PETs do OCN, sem mask_table)
-bash tools/coupler/domain-mom6.bash --no-mask --pes 128
+bash tools/ocean/domain-mom6.bash --no-mask --pes 128
 
 # 2. Planejar a topologia antes de editar a nuopc.input
 python3 tools/coupler/plan-layout.py --atm 256 --ocn 128
-#    (as contagens só valem com pet_layout = 'split' na nuopc.input)
 
 # 3. Verificar pré-requisitos, partição METIS, select e limites da fila
 bash run/run_esmApp.jaci -n 384 --check
@@ -174,14 +167,12 @@ bash run/run_esmApp.jaci -n 384 -q pesqextra -w 02:00:00
 ```
 
 Pontos que costumam surpreender na primeira vez, todos detalhados em
-`docs/MULTINO-run_esmApp.md`:
+`docs/MULTINO-run_esmApp.md` (na árvore do `MONAN-Coupler`):
 
 - O nó de cálculo anuncia `ncpus = 512`, mas o limite das filas é contado em
   **cores físicos**. O `select` pede no máximo 256 por nó, e a posse do nó
   inteiro vem de `place=scatter:excl`.
-- Com `pet_layout = 'split'`, a partição METIS é dimensionada por
-  `atm_pet_count`, e não pelo total passado em `-n`. Repare que o critério é o
-  *layout*, não o `coupling_mode`: desde a v14.20 `sequential` também admite
-  split de comunicador.
+- No modo *concurrent*, a partição METIS é dimensionada por `atm_pet_count`, e
+  não pelo total passado em `-n`.
 - O `mask_table` do FMS com `nmask > 0` é incompatível com o cap NUOPC atual do
   MOM6. Use `--no-mask` no acoplado, conforme `docs/mascara-cap-nuopc.md`.
