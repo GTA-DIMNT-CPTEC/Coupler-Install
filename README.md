@@ -4,7 +4,10 @@ Scripts de instalação do sistema acoplado **MONAN-A 2.0 × MOM6+SIS2**
 (NUOPC-ESMF 8.9.1). Este repositório é **independente** do sistema acoplado: ele
 baixa o `MONAN-Coupler` (com os modelos como submódulos) e compila tudo.
 
-INPE / CGCT / DIMNT. GT Acoplamento de Modelos.
+INPE / CGCT / DIMNT — GT Acoplamento de Modelos.
+
+Sistema acoplado: [`MONAN-Coupler`](https://github.com/GTA-DIMNT-CPTEC/MONAN-Coupler) · Documentação:
+[`MONAN-Coupler/docs`](https://github.com/GTA-DIMNT-CPTEC/MONAN-Coupler/tree/develop/docs)
 
 **Pré-requisitos:** `git` e o **ESMF 8.9.1** já instalado (com MOAB interno). O
 caminho do ESMF é informado pela configuração de sítio (`sites/site-jaci.bash`).
@@ -44,7 +47,7 @@ bash run/run_esmApp.jaci -n 128 # submete via PBS (128 PETs)
 
 ## Estrutura
 
-```
+```text
 Coupler-Install/             ← scripts de instalação (standalone)
 ├── Makefile                 ← atalhos: make / make build / make check
 ├── install.bash             ← ★ baixa (git recursivo) e instala
@@ -84,12 +87,12 @@ junto dos fontes que ela documenta evita que as duas versões divirjam.
 
 | Documento (`<COUPLER_ROOT>/docs/`) | Assunto |
 |:----------|:--------|
-| `CHANGELOG.md` | Histórico de versões, no formato *Keep a Changelog* simplificado. Registra também o raciocínio por trás de decisões contraintuitivas, para que não sejam revertidas por engano. |
-| `notas-standalone.md` | Notas de design da separação entre o instalador e o sistema acoplado: resolução de caminhos, preflight e o contrato entre os dois repositórios. |
-| `domain-mom6.md` | Algoritmo do `tools/ocean/domain-mom6.bash`: soma de prefixos 2D, escore dos candidatos a `LAYOUT`, formato do `mask_table`, filtros de forma (`--min-tile`, `--max-aspect`) e armadilhas. |
-| `mascara-cap-nuopc.md` | Por que um `mask_table` com `nmask > 0` é incompatível com o cap NUOPC atual do MOM6: representação densa contra esparsa no ESMF, o buraco no `DistGrid` e as duas rotas de correção. |
-| `MULTINO-run_esmApp.md` | Execução em vários nós na Jaci: hardware do sítio, contabilidade de `ncpus`, topologia nas combinações de `coupling_mode` × `pet_layout`, tabela de filas e limites, planejador `plan-layout.py` e boas práticas. |
-| `SMT-Jaci.md` | Caracterização do SMT nos nós de cálculo e medição do seu efeito sobre o acoplado: metodologia, resultados por componente, limitações de escopo e procedimento de reprodução. |
+| [`CHANGELOG.md`](https://github.com/GTA-DIMNT-CPTEC/MONAN-Coupler/blob/develop/docs/CHANGELOG.md) | Histórico de versões, no formato *Keep a Changelog* simplificado. Registra também o raciocínio por trás de decisões contraintuitivas, para que não sejam revertidas por engano. |
+| [`notas-standalone.md`](https://github.com/GTA-DIMNT-CPTEC/MONAN-Coupler/blob/develop/docs/notas-standalone.md) | Notas de design da separação entre o instalador e o sistema acoplado: resolução de caminhos, preflight e o contrato entre os dois repositórios. |
+| [`domain-mom6.md`](https://github.com/GTA-DIMNT-CPTEC/MONAN-Coupler/blob/develop/docs/domain-mom6.md) | Algoritmo do `tools/ocean/domain-mom6.bash`: soma de prefixos 2D, escore dos candidatos a `LAYOUT`, formato do `mask_table`, filtros de forma (`--min-tile`, `--max-aspect`) e armadilhas. |
+| [`mascara-cap-nuopc.md`](https://github.com/GTA-DIMNT-CPTEC/MONAN-Coupler/blob/develop/docs/mascara-cap-nuopc.md) | Por que um `mask_table` com `nmask > 0` é incompatível com o cap NUOPC atual do MOM6: representação densa contra esparsa no ESMF, o buraco no `DistGrid` e as duas rotas de correção. |
+| [`MULTINO-run_esmApp.md`](https://github.com/GTA-DIMNT-CPTEC/MONAN-Coupler/blob/develop/docs/MULTINO-run_esmApp.md) | Execução em vários nós na Jaci: hardware do sítio, contabilidade de `ncpus`, topologia nas combinações de `coupling_mode` × `pet_layout`, tabela de filas e limites, planejador `plan-layout.py` e boas práticas. |
+| [`SMT-Jaci.md`](https://github.com/GTA-DIMNT-CPTEC/MONAN-Coupler/blob/develop/docs/SMT-Jaci.md) | Caracterização do SMT nos nós de cálculo e medição do seu efeito sobre o acoplado: metodologia, resultados por componente, limitações de escopo e procedimento de reprodução. |
 
 ### Por onde começar
 
