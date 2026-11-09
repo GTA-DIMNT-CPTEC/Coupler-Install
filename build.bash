@@ -90,6 +90,19 @@ else
   log_info "Modo: instalação completa (etapas 1 → ${TOTAL_STEPS})"
 fi
 
+# Mantém <COUPLER_ROOT>/run/setenv-site.bash igual à config de sítio em uso (o
+# install.bash faz o mesmo). Sem isto, uma árvore já baixada seria compilada com
+# a config nova, mas 'source run/setenv-gnu.bash' e run/run_esmApp.jaci
+# continuariam lendo a cópia antiga, com o LD_LIBRARY_PATH de outro ESMF.
+if resolve_site_env "${SCRIPT_DIR}" && [[ -d "${COUPLER_ROOT}/run" ]]; then
+  _site_copia="${COUPLER_ROOT}/run/setenv-site.bash"
+  if [[ ! "${SITE_ENV}" -ef "${_site_copia}" ]]; then
+    cp -f "${SITE_ENV}" "${_site_copia}"
+    log_ok "Config de sítio copiada para ${_site_copia}"
+  fi
+  unset _site_copia
+fi
+
 timer_start
 declare -a STEP_TIMES=()
 

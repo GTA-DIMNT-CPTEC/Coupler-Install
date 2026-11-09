@@ -140,8 +140,8 @@ mkdir -p "${MOM6_LOGDIR}"
 # =============================================================================
 
 # Módulos Cray XD 2000 (definidos em site-jaci.bash → MODULES_MOM6).
-# MOM6/FMS usam NetCDF/HDF5 seriais (cray-netcdf), não o parallel-netcdf do
-# MPAS; o wrapper 'ftn' injeta includes e libs quando o módulo está carregado.
+# MOM6/FMS usam a NetCDF/HDF5 da variante paralela, a mesma do ESMF; o wrapper
+# 'ftn' injeta includes e libs quando o módulo está carregado.
 load_modules "${MODULES_MOM6[@]}"
 
 # ESMF — esmf.mk definido em site-jaci.bash (ESMFMKFILE), sobrescrevível por
@@ -200,7 +200,7 @@ MKMF="${MOM6_EXAMPLES_DIR}/src/mkmf/bin/mkmf"
 LIST_PATHS="${MOM6_EXAMPLES_DIR}/src/mkmf/bin/list_paths"
 
 # Template mkmf do projeto: versão Cray/GNU já sem os caminhos do NetCDF custom
-# (-I/-L .../lib_gnucray/netcdf). Com cray-netcdf carregado, o 'ftn' fornece o
+# (-I/-L .../lib_gnucray/netcdf). Com o módulo do NetCDF carregado, o 'ftn' fornece o
 # NetCDF; um caminho custom duplicaria headers e arriscaria divergência de versão.
 # Procurado em vários locais (templates/, raiz do instalador, install/…); para
 # forçar a origem: export MKMF_TEMPLATE_SRC=/caminho/para/template.mk
@@ -258,7 +258,7 @@ if [[ "${ONLY_NUOPC}" == false ]]; then
       -c "-Duse_libMPI -Duse_netCDF -DSPMD" \
       path_names
 
-  # NETCDF=4: o fms2_io exige a API NetCDF-4/HDF5 (fornecida por cray-netcdf).
+  # NETCDF=4: o fms2_io exige a API NetCDF-4/HDF5 (fornecida por cray-netcdf-hdf5parallel).
   make NETCDF=4 REPRO=1 libfms.a -j "${MAKE_JOBS}" 2>&1 | tee "${MOM6_LOGDIR}/make_fms.log"
 
   timer_step "[1/3] FMS compilado"

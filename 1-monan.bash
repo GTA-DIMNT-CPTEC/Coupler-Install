@@ -194,11 +194,11 @@ if [[ -z "${PNETCDF_DIR:-}" ]]; then
 fi
 export PNETCDF="${PNETCDF_DIR}"
 
-# NETCDF_DIR é injetado pelo módulo cray-netcdf (NetCDF serial). O link do MPAS
+# NETCDF_DIR é injetado pelo módulo cray-netcdf-hdf5parallel. O link do MPAS
 # referencia -lnetcdf -lnetcdff em utilitários (ex.: build_tables) e no
 # executável; sem este caminho ocorre "ld: cannot find -lnetcdf".
 if [[ -z "${NETCDF_DIR:-}" ]]; then
-  log_error "NETCDF_DIR não definido — módulo 'cray-netcdf' carregou?"
+  log_error "NETCDF_DIR não definido — módulo 'cray-netcdf-hdf5parallel' carregou?"
   exit 1
 fi
 export NETCDF="${NETCDF_DIR}"
@@ -237,6 +237,17 @@ mkdir -p "${MONAN_LOGDIR}"
 # Flags de compilação — comuns aos dois cores (array: expansão segura, sem
 # depender de word-splitting de uma string).
 MAKE_ARGS=(OPENMP=true USE_PIO2=false PRECISION=double AUTOCLEAN=true)
+
+# PIO interno do ESMF. O Makefile do MONAN-Model liga '-lesmf -L$(PIO_LIB) -lpioc',
+# mas só define PIO_LIB quando PIO está definido, o que não ocorre com SMIOL. Com
+# PIO_LIB vazio, o ld lê '-lpioc' como o diretório do '-L' e a biblioteca não entra
+# no link. O ESMF do módulo instala libpioc.a junto da libesmf.so, sem embuti-la
+# (PIOc_* ficam indefinidas na libesmf.so), então ela é obrigatória no link. Passar
+# só PIO_LIB mantém o SMIOL: o modo PIO depende da variável PIO, que segue vazia.
+if compgen -G "${ESMF_LIBDIR}/libpioc.*" > /dev/null; then
+  MAKE_ARGS+=("PIO_LIB=${ESMF_LIBDIR}")
+  log_ok "PIO interno do ESMF  PIO_LIB=${ESMF_LIBDIR}"
+fi
 
 # ── PASSO 1/2 — Core 'atmosphere' (compilação e cópia dos artefatos) ─────────
 # A cópia DEVE ocorrer ANTES da compilação do 'init_atmosphere': com

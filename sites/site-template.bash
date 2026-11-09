@@ -91,6 +91,7 @@ MODULES_MONAN=(
   # cray-netcdf/<versão>
   # cray-parallel-netcdf/<versão>
   # METIS/<versão>
+  # esmf/<versão>    (só se o ESMF vier de módulo; coerente com ESMFMKFILE acima)
 )
 
 # ── Módulos para compilar o MOM6+SIS2+FMS (instalador 2) ─────────────────────
@@ -101,4 +102,5 @@ MODULES_MOM6=(
   # PrgEnv-gnu/<versão>
   # cray-hdf5/<versão>
   # cray-netcdf/<versão>
+  # esmf/<versão>    (só se o ESMF vier de módulo; coerente com ESMFMKFILE acima)
 )

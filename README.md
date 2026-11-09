@@ -9,8 +9,10 @@ INPE / CGCT / DIMNT — GT Acoplamento de Modelos.
 Sistema acoplado: [`MONAN-Coupler`](https://github.com/GTA-DIMNT-CPTEC/MONAN-Coupler) · Documentação:
 [`MONAN-Coupler/docs`](https://github.com/GTA-DIMNT-CPTEC/MONAN-Coupler/tree/develop/docs)
 
-**Pré-requisitos:** `git` e o **ESMF 8.9.1** já instalado (com MOAB interno). O
-caminho do ESMF é informado pela configuração de sítio (`sites/site-jaci.bash`).
+**Pré-requisitos:** `git` e o **ESMF 8.9.1** já instalado (com MOAB interno). Na
+Jaci, ele vem do módulo `esmf/8.9.1-gcc13`, que as etapas de instalação carregam
+sozinhas, sem `module load` manual. O módulo e o caminho do ESMF são informados
+pela configuração de sítio (`sites/site-jaci.bash`).
 Os modelos (MONAN-Model, MOM6-examples) chegam como **submódulos**; não é preciso
 cloná-los à parte.
 
@@ -111,6 +113,7 @@ junto dos fontes que ela documenta evita que as duas versões divirjam.
 | Trocar ESMF, módulos, alvo de CPU   | `sites/site-jaci.bash`                             |
 | Rodar em outra máquina              | copie `sites/site-template.bash` → `sites/site-X.bash`, ajuste e `export SITE_ENV=sites/site-X.bash` |
 | Ajuste pontual sem editar arquivo   | `export VAR=valor` antes (tem prioridade sobre o sítio) |
+| Usar outro ESMF só nesta instalação | `export ESMFMKFILE=/caminho/esmf.mk` antes (o módulo `esmf/8.9.1-gcc13` fica de fora) |
 | Outro template mkmf                 | `export MKMF_TEMPLATE_SRC=/caminho/template.mk`   |
 | Outra raiz para o acoplador         | `--coupler-root DIR` ou `export COUPLER_ROOT=DIR` |
 | Outro fork/branch dos modelos       | ajuste o `.gitmodules` do `MONAN-Coupler`         |
