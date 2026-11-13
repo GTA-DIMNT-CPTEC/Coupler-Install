@@ -367,7 +367,8 @@ log_ok "Artefatos do 'atmosphere' copiados."
 if [[ "${SKIP_INIT_ATM}" == false ]]; then
   log_step 2 2 "Core 'init_atmosphere' — compilação"
 
-  make -j "${MAKE_JOBS}" "${MONAN_TARGET}" CORE=init_atmosphere "${MAKE_ARGS[@]}" 2>&1 \
+  unset ESMF_MOD ESMF_LIBDIR ESMFMKFILE
+  make -j "${MAKE_JOBS}" "${MONAN_TARGET2}" CORE=init_atmosphere "${MAKE_ARGS[@]}" 2>&1 \
     | tee "${MONAN_LOGDIR}/make-init_atmosphere.log"
 
   timer_step "Core 'init_atmosphere' compilado"

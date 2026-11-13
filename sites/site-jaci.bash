@@ -101,9 +101,11 @@ fi
 # CPU_TARGET: módulo de targeting do Cray. 'turin' = AMD Zen5 (nós XD2000).
 #   Em outra arquitetura, ajuste (ex.: craype-x86-milan). É referenciado nas
 #   listas de módulos abaixo, então muda em um só lugar.
-# MONAN_TARGET: alvo do Makefile do MONAN-Model para este host/toolchain.
+# MONAN_TARGET: alvo do Makefile do MONAN-Model (atmosphere_model) para este host/toolchain.
+# MONAN_TARGET2: alvo do Makefile do MONAN-Model (init_atmosphere_model) para este host/toolchain.
 : "${CPU_TARGET:=craype-x86-turin}"
 : "${MONAN_TARGET:=gfortran-coupler-xd2000}"
+: "${MONAN_TARGET2:=gfortran-xd2000}"
 
 # ── Wrappers do compilador (Cray) ────────────────────────────────────────────
 # Na Jaci, sempre os wrappers 'ftn'/'cc' (nunca gfortran/gcc direto).
